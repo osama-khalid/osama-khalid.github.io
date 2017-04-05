@@ -1,1 +1,0 @@
-# osama-khalid.github.io
