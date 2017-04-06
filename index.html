@@ -1,75 +1,85 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>SidebarJS</title>
+		<link href="http://fonts.googleapis.com/css?family=Source+Sans+Pro:200,300,400" rel="stylesheet" />
+		<link rel="stylesheet" href="css/lib/fontello.css" />
+		<link rel="stylesheet" href="css/lib/normalize.css" />
+		
+		<link rel="stylesheet" href="css/index.css" />
+		
+		<link rel="stylesheet" href="css/sidebar.css" />
+		
+		<!--[if lt IE 9]>
+			<script src="js/lib/html5shiv.js"></script>
+		<![endif]-->
+	</head>
+	<body>
+		
 
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<div class="wrapper jsc-sidebar-content jsc-sidebar-pulled">
+	<nav>
+		<a href="#" class="icon-menu link-menu jsc-sidebar-trigger"></a>
+	</nav>
+	<section class="main-content">
+		<div class="main-content-header">
+			<h1 class="headline"><span class="headline-main">Sidebar</span>JS</h1>
+			<p class="version">v 0.2.0</p>
+			<p>SidebarJS is a jQuery plugin for side navigation.</p>
+			<ul class="btn-list">
+				<li><a href="http://github.com/makotot/sidebar" class="btn">View on Github</a></li>
+				<li><a href="http://github.com/makotot/sidebar/releases/0.2.0" class="btn">Download</a></li>
+			</ul>
+		</div>
+		<div class="main-content-body">
+			<div class="main-content-body-inner">
+				<h2>Public API</h2>
+				<ul>
+					<li>
+						<h3>.push()</h3>
+						<p><a href="#" id="api-push">Open</a> Sidebar content from JavaScript.</p>
+					</li>
+					<li>
+						<h3>.pull()</h3>
+						<p><a href="#" id="api-pull">Close</a> Sidebar content from JavaScript.</p>
+					</li>
+				</ul>
+			</div>
+		</div>
+	</section>
 
-<html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='en'>
-<head>
-<meta http-equiv='Content-Type' content='text/html; charset=utf-8'/>
+</div>
 
-<title>  : Irina Werning</title>
-
-<link rel='stylesheet' href='http://irinawerning.com/ndxz-studio/site/sample/style.css' type='text/css' />
-<!--[if lte IE 6]>
-<link rel='stylesheet' href='http://irinawerning.com/ndxz-studio/site/sample/ie.css' type='text/css' />
-<![endif]-->
-
-<style type='text/css'>
-#num {padding-left: 6px;}
-	.img-bot {margin-bottom: 6px; display: block; }
-</style>
-
-<script type='text/javascript' src='http://irinawerning.com/ndxz-studio/site/js/jquery.js'></script>
-<script type='text/javascript' src='http://irinawerning.com/ndxz-studio/site/js/cookie.js'></script>
-<script type='text/javascript' src='http://irinawerning.com/ndxz-studio/site/js/jquery.cycle.all.js'></script>
-
-<script type='text/javascript'>
-path = 'http://irinawerning.com/files/gimgs/';
-
-$(document).ready(function()
-{
-	setTimeout('move_up()', 1);
-});
-</script>
-<script type='text/javascript'>
-$(document).ready(function(){ 
-	$('#s1').cycle({
-	fx:'fade', 
-	speed:'2000', 
-	timeout: 0, 
-	next:'#next', prev:'#prev'});
-	});
-</script>
+		<nav class="sidebar jsc-sidebar" id="jsi-nav" data-sidebar-options="">
+	<ul class="sidebar-list">
+		<li><a href="./" class="current">SidebarJS</a></li>
+		<li><a href="http://github.com/makotot/sidebar/">View on Github</a></li>
+		<li><a href="http://github.com/makotot/sidebar/releases">Download</a></li>
+	</ul>
+</nav>
 
 
+		<script src="js/lib/jquery.min.js"></script>
+		
+		<script src="js/sidebar.js"></script>
+		
+		<script>
+			$('#jsi-nav').sidebar({
+				trigger: '.jsc-sidebar-trigger',
+				scrollbarDisplay: true,
+				pullCb: function () { console.log('pull'); },
+				pushCb: function () { console.log('push'); }
+			});
 
-<script type="text/javascript">
-
-  var _gaq = _gaq || [];
-  _gaq.push(['_setAccount', 'UA-30020686-1']);
-  _gaq.push(['_trackPageview']);
-
-  (function() {
-    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
-    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
-    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
-  })();
-
-</script>
-</head>
-<body>
-  <div class="ui sidebar inverted vertical menu">
-    <a class="item">
-      1
-    </a>
-    <a class="item">
-      2
-    </a>
-    <a class="item">
-      3
-    </a>
-  </div>
-  <div class="pusher">
-    <!-- Site content !-->
-  </div>
-</body>
-	</html>
+			$('#api-push').on('click', function (e) {
+				e.preventDefault();
+				$('#jsi-nav').data('sidebar').push();
+			});
+			$('#api-pull').on('click', function (e) {
+				e.preventDefault();
+				$('#jsi-nav').data('sidebar').pull();
+			});
+		</script>
+	</body>
+</html>
