@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+  
+<title>Osama Khalid</title>
+<link rel="icon" href="blank.ico">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+<head>
+<style>
+
+  body{
+    width: auto;
+  }
+  #items{
+  overflow-x: scroll;
+  width: auto;
+      white-space: nowrap;
+  }
+  .item{
+     display: inline-block;
+     
+     height: auto;
+     
+  }
+  
+div.cities {
+    background-color: #5f5f5f;
+    color: white;
+    margin: 20px 0 20px 0;  
+    padding: 20px;
+
+} 
+</style>
+</head>  
+  
+<body>
+
+<!-- Sidebar -->
+<div class="w3-sidebar w3-light-grey w3-bar-block" style="width:150px">
+  <h3 class="w3-bar-item">Menu</h3>
+  <a href="#" class="w3-bar-item w3-button">Projects</a>
+  <a href="#" class="w3-bar-item w3-button">Photos</a>
+  <a href="#" class="w3-bar-item w3-button">Blog</a>
+  <a href="#" class="w3-bar-item w3-button">Food</a>
+  <a href="#" class="w3-bar-item w3-button">About</a>
+</div>
+
+<!-- Page Content -->
+<div style="margin-left:150px; height: 1%">
+
+
+
+
+
+<div class="w3-container">
+<center>
+<h2><font face="helvetica">Basketball: UIowa vs UNI</font></h2>
+<section>
+    
+  
+   <div id="items">
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17799060_1315337855210858_6222120456427857992_n.jpg?oh=4cccc5111724774ad4841eabb6b3c652&oe=5996D24B" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17800206_1315338188544158_6412293909678335992_n.jpg?oh=0dedb5963bd0a2ea52af106c17c2e63d&oe=598AF532" alt="Corridor" style="height:575px">
+           </div>
+         
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17861921_1315337961877514_7136789146616586176_n.jpg?oh=2356c0a37a8aabb427955b579cdf5cad&oe=594EFAD6" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17883545_1315337978544179_7432748144828109258_n.jpg?oh=d3b9e11bbc71c1652e91f92b80b79bf1&oe=59533496" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17883779_1315338685210775_6138622709555018001_n.jpg?oh=3644298036f8d53bdf551cc91e92f8d6&oe=594E682E" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17861826_1315338181877492_4510703083200737441_n.jpg?oh=166e12950038ee99cab584e9af370fef&oe=595C836D" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17523376_1315337811877529_8325642768347685905_n.jpg?oh=16bdd6153a9c9b9dacf8bfb893fee4db&oe=59920098" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17800469_1315338205210823_3745646658376155954_n.jpg?oh=ccba45c5041b968a952508ea19974df9&oe=5999076F" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17861583_1315338415210802_5622521421783267156_n.jpg?oh=5751f3bb9fc3054b506475088810f419&oe=598F9ADC" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17800113_1315337968544180_924172198208755713_n.jpg?oh=9a12cb02042ce3d57f3015049d5d4eb3&oe=595427F7" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17883993_1315338391877471_8023864321866246805_n.jpg?oh=ef4649603144057c5f02761c54fa4da4&oe=598FC38B" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17862464_1315338401877470_8539929113936925266_n.jpg?oh=c50b7597759be7bf6b42ce1d2b76b9ad&oe=598E232E" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17523699_1315338651877445_153788119566753068_n.jpg?oh=341560ff191ec7ec0892a94a9ad75c16&oe=59933042" alt="Corridor" style="height:575px">
+           </div>
+           <div class="item">
+             <img src="https://scontent-ort2-1.xx.fbcdn.net/v/t1.0-9/17522858_1315338658544111_1980338608399994108_n.jpg?oh=947b718573052a81bd89eb0b3cbd952b&oe=594CAD06" alt="Corridor" style="height:575px">
+           </div>
+           
+        </div>
+    
+  </div>
+</section>
+
+</div>
+</center>
+</div>
+      
+</body>
+</html>
