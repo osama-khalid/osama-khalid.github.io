@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toki Pona Language Game</title>
+    <meta name="description" content="Translate Toki Pona phrases into English and test your language skills.">
+
+    <style>
+        /* General Styling */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6;
+            color: #333;
+            line-height: 1.6;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            gap: 20px;
+        }
+
+        .game-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex-grow: 1;
+            max-width: 600px;
+            order: 0;
+        }
+
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+            padding: 25px;
+            margin-bottom: 20px;
+            text-align: center;
+            width: 100%;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            color: #34495e;
+            font-size: 1.2em;
+            margin-top: 0;
+        }
+
+        a {
+            color: #3498DB;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Game Elements */
+        #setup {
+            background-color: #28a745;
+            color: white;
+            padding: 12px 25px;
+            font-size: 1.1em;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 20px;
+        }
+
+        #setup:hover {
+            background-color: #218838;
+        }
+
+        #lookup button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            font-size: 1em;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        #lookup button:hover {
+            background-color: #0056b3;
+        }
+
+        #lookup button#btnSkip { /* Skip button */
+            background-color: #6c757d;
+        }
+
+        #lookup button#btnSkip:hover {
+            background-color: #5a6268;
+        }
+        
+        #lookup button#revealLetterBtn { /* Reveal Letter button */
+            background-color: #ffc107; /* Yellowish */
+            color: #333;
+        }
+
+        #lookup button#revealLetterBtn:hover {
+            background-color: #e0a800; /* Darker yellowish */
+        }
+
+        #tokenInput {
+            padding: 10px 15px;
+            font-size: 1em;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 80%;
+            max-width: 300px;
+            margin-bottom: 15px;
+        }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        /* Toki Pona Phrase Display */
+        .toki-phrase-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        .toki-phrase-wrapper table {
+            border-collapse: collapse;
+            margin: 0 auto;
+        }
+
+        .toki-phrase-wrapper th {
+            padding: 5px 10px;
+            font-weight: normal;
+            position: relative;
+            text-align: center;
+        }
+
+        .toki-word-hint-container {
+            padding: 5px 0;
+            cursor: help;
+        }
+
+        .toki-word-hint-container .word-display {
+            display: block;
+            min-width: 60px;
+            padding: 3px 0;
+        }
+
+        .word-definition-tooltip {
+            display: none;
+            position: absolute;
+            background-color: #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            white-space: nowrap;
+            font-size: 0.9em;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 5px;
+        }
+
+        .toki-word-hint-container:hover + .word-definition-tooltip {
+            display: block;
+        }
+
+        /* Result and Hints */
+        #resultMessage {
+            font-weight: bold;
+            margin-top: 15px;
+        }
+
+        #livesRemaining {
+            color: #d9534f;
+            font-weight: bold;
+        }
+        
+        #timeLeftDisplay {
+            color: #28a745;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+
+        #blanksDisplay {
+            font-size: 1.2em;
+            letter-spacing: 1px;
+            min-height: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 2px;
+        }
+        #tokiPhraseTranslation {
+            font-style: italic;
+            margin-top: 15px;
+        }
+
+        /* History Panel Styling */
+        #historyPanel {
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            width: 200px;
+            min-height: 200px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            align-self: flex-start;
+            order: 0;
+        }
+
+        #historyPanel h3 {
+            margin-top: 0;
+            color: #34495e;
+            font-size: 1.1em;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }
+
+        #wrongAnswersList {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-size: 0.9em;
+            color: #555;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        #wrongAnswersList li {
+            padding: 5px 0;
+            border-bottom: 1px dotted #eee;
+        }
+
+        #wrongAnswersList li:last-child {
+            border-bottom: none;
+        }
+
+        /* Start Screen Specific Styles */
+        #startScreen {
+            text-align: left;
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        #startScreen h3 {
+            color: #2c3e50;
+            font-size: 1.3em;
+            margin-bottom: 10px;
+        }
+        #startScreen p {
+            margin-bottom: 10px;
+        }
+        #startScreen ul {
+            list-style-type: disc;
+            margin-left: 25px;
+            margin-bottom: 15px;
+        }
+        #startScreen li {
+            margin-bottom: 5px;
+        }
+        .example-box {
+            background-color: #eaf1f7;
+            border-left: 4px solid #3498DB;
+            padding: 10px 15px;
+            margin: 10px 0;
+            font-style: italic;
+            color: #4a6d8d;
+            font-size: 0.95em;
+        }
+        .example-box strong {
+            color: #2c3e50;
+        }
+
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+                padding: 15px;
+                gap: 15px;
+            }
+            .game-wrapper {
+                max-width: 100%;
+                order: 0;
+            }
+            .container {
+                padding: 20px;
+            }
+            #tokenInput {
+                width: 90%;
+            }
+            #lookup button {
+                padding: 8px 15px;
+                font-size: 0.9em;
+            }
+            #historyPanel {
+                width: 100%;
+                max-width: 400px;
+                margin: 0 auto;
+                order: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="historyPanel">
+        <h3>History</h3>
+        <ul id="wrongAnswersList">
+            <li style="color: #777;">No wrong answers yet for this word.</li>
+        </ul>
+    </div>
+
+    <div class="game-wrapper">
+        <header>
+            <h1>Toki Pona Word Guess</h1>
+            <h2>Translate <a href="https://tokipona.org/" target="_blank" rel="noopener noreferrer">Toki Pona</a> phrases into English</h2>
+            <p><b>Toki Pona</b> is a <a href="https://en.wikipedia.org/wiki/Constructed_language" target="_blank" rel="noopener noreferrer">conlang</a> with a base vocabulary of 123 words.</p>
+        </header>
+
+        <main class="container">
+            <div id="startScreen">
+                <h3>How to Play:</h3>
+                <p>Your goal is to guess the English translation of a Toki Pona phrase. You'll see an English word with some letters hidden, and a Toki Pona phrase below it that defines the word.</p>
+                
+                <ul>
+                    <li><strong>Guess the Word:</strong> Type your English guess into the input box and click "Enter".</li>
+                    <li><strong>Attempts (Lives):</strong> You start with 10 attempts for each word. Each wrong guess costs 1 attempt.</li>
+                    <li><strong>Time Limit:</strong> You have 60 seconds to guess each word. If time runs out, you lose that round.</li>
+                    <li><strong>Hover for Hints:</strong> Move your mouse over the Toki Pona words in the phrase to see their individual English definitions. This is crucial for understanding the meaning!
+                        <div class="example-box">
+                            <strong>Example:</strong> If you see "toki pona" in the phrase:<br>
+                            Hover over "toki" &rarr; Definition: "language, word, talk"<br>
+                            Hover over "pona" &rarr; Definition: "good, simple, to fix"<br>
+                            This helps you piece together the phrase's meaning.
+                        </div>
+                    </li>
+                    <li><strong>Reveal a Letter:</strong> If you're stuck, click "Reveal Letter". This will show one hidden letter in order (left to right) in the English word but costs 2 attempts.
+                        <div class="example-box">
+                            <strong>Example:</strong> If the word is "banana" and displayed as "_ _ _ _ _ _", revealing a letter might show "b _ _ _ _ _", then "b a _ _ _ _", and so on.
+                        </div>
+                        <p><strong>Special Rule:</strong> If the word to guess is less than 5 letters long and all its letters have been revealed using this button, the round will automatically end, and the correct answer will be shown.</p>
+                    </li>
+                    <li><strong>Skip Word:</strong> If you're completely lost, click "Skip" to move to the next word without penalty to your score (but you won't get points for it).</li>
+                    <li><strong>Score:</strong> You get points equal to the number of attempts you have left when you correctly guess a word (max 10 points). If you run out of attempts or time, or skip, you get 0 points for that round.</li>
+                    <li><strong>History:</strong> The panel on the left will show your previous wrong guesses for the current word, helping you avoid repeating mistakes.</li>
+                </ul>
+                <p>Ready to test your Toki Pona knowledge?</p>
+                <button id="setup">Start Game!</button>
+            </div>
+
+            <section id="gameInfo" role="status" aria-live="polite" style="display: none;">
+                <div id="questionsRemaining"><b>Remaining Questions: </b>10</div>
+                <div id="scoreDisplay"><b>Score: </b>0</div>
+                <div id="timeLeftDisplay"><b>Time Left: </b>60 seconds</div>
+                <div id="livesRemaining"></div>
+            </section>
+
+            <section id="gameContent" style="display: none;">
+                <div id="blanksDisplay">&nbsp;</div>
+                <div id="tokiPhraseTranslation"></div>
+                <div class="toki-phrase-wrapper" id="tokiPhraseContainer"></div>
+                <div id="lookup"></div>
+                <p id="resultMessage">&nbsp;</p>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const game = {
+            candidateList: [], // Stores [English word, Toki Pona phrase]
+            dictionary: {},    // Stores {Toki Pona word: definition}
+            currentSolution: '',
+            currentTokiPonaPhrase: '',
+            currentScore: 0,
+            remainingQuestions: 10,
+            questionCount: 0,
+            playerLives: 10,
+            maxWrongAttempts: 10,
+            wrongAnswers: [], // Array to store wrong answers for the current word
+            revealedLettersIndices: [], // To keep track of revealed letters indices
+
+            timerInterval: null, // Stores the setInterval ID
+            timeLeft: 60,        // Current time left for the round
+            initialTime: 60,     // Starting time for each question
+
+            // Cached DOM Elements
+            setupButton: document.getElementById('setup'),
+            startScreen: document.getElementById('startScreen'),
+            gameInfo: document.getElementById('gameInfo'),
+            gameContent: document.getElementById('gameContent'),
+            questionsRemaining: document.getElementById('questionsRemaining'),
+            scoreDisplay: document.getElementById('scoreDisplay'),
+            timeLeftDisplay: document.getElementById('timeLeftDisplay'),
+            livesRemainingDiv: document.getElementById('livesRemaining'),
+            blanksDisplay: document.getElementById('blanksDisplay'),
+            tokiPhraseTranslation: document.getElementById('tokiPhraseTranslation'),
+            tokiPhraseContainer: document.getElementById('tokiPhraseContainer'),
+            lookupDiv: document.getElementById('lookup'),
+            resultMessage: document.getElementById('resultMessage'),
+            wrongAnswersList: document.getElementById('wrongAnswersList'),
+
+            init() {
+                this.setupButton.addEventListener('click', () => this.startGame());
+                this.loadData();
+                this.updateDisplay();
+                this.updateHistoryPanel();
+            },
+
+            async loadData() {
+                try {
+                    const phrasesUrl = "https://raw.githubusercontent.com/osama-khalid/LanguageGame/main/phrases.tsv";
+                    const dictionaryUrl = "https://raw.githubusercontent.com/osama-khalid/LanguageGame/main/dictionary_.csv";
+
+                    const [phrasesResponse, dictResponse] = await Promise.all([
+                        fetch(phrasesUrl),
+                        fetch(dictionaryUrl)
+                    ]);
+
+                    if (!phrasesResponse.ok) throw new Error(`HTTP error! status: ${phrasesResponse.status} for phrases.`);
+                    if (!dictResponse.ok) throw new Error(`HTTP error! status: ${dictResponse.status} for dictionary.`);
+
+                    const phrasesText = await phrasesResponse.text();
+                    this.candidateList = phrasesText.split('\n')
+                        .map(row => row.split('\t'))
+                        .filter(row => row.length === 2 && row[0].trim() !== '' && row[1].trim() !== '');
+
+                    const dictText = await dictResponse.text();
+                    dictText.split('\n').forEach(row => {
+                        const parts = row.split('\t');
+                        if (parts.length >= 2) {
+                            this.dictionary[parts[0]] = parts[1];
+                        }
+                    });
+                    console.log("Game data loaded successfully.");
+                } catch (error) {
+                    console.error("Failed to load game data:", error);
+                    this.resultMessage.textContent = "Error loading game data. Please try again later.";
+                }
+            },
+
+            startGame() {
+                this.startScreen.style.display = 'none';
+                this.gameInfo.style.display = 'block';
+                this.gameContent.style.display = 'block';
+
+                this.renderLookupControls(); // Render input and buttons
+                this.attachControlListeners(); // Attach event listeners
+                this.getNewWord();
+            },
+
+            renderLookupControls() {
+                this.lookupDiv.innerHTML = `
+                    <label for="tokenInput" class="sr-only">Enter your translation</label>
+                    <input id="tokenInput" type="text" placeholder="Type your guess here" value=""><br><br>
+                    <button id="btnEnter">Enter</button>
+                    <button id="btnSkip">Skip</button>
+                    <button id="revealLetterBtn">Reveal Letter<br> (cost: 2 attempts)</button>
+                `;
+            },
+
+            attachControlListeners() {
+                document.getElementById('btnEnter').addEventListener('click', () => this.submitGuess());
+                document.getElementById('btnSkip').addEventListener('click', () => this.skipWord());
+                document.getElementById('revealLetterBtn').addEventListener('click', () => this.revealLetter());
+                document.getElementById('tokenInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.submitGuess();
+                    }
+                });
+            },
+
+            updateDisplay() {
+                this.questionsRemaining.innerHTML = `<b>Remaining Questions: </b>${this.remainingQuestions - this.questionCount}`;
+                this.scoreDisplay.innerHTML = `<b>Score: </b>${this.currentScore}`;
+                this.timeLeftDisplay.innerHTML = `<b>Time Left: </b>${this.timeLeft} seconds`;
+                this.livesRemainingDiv.innerHTML = `<b>Attempts:</b> ${this.playerLives}`;
+            },
+
+            updateHistoryPanel() {
+                if (this.wrongAnswers.length === 0) {
+                    this.wrongAnswersList.innerHTML = '<li style="color: #777;">No wrong answers yet for this word.</li>';
+                } else {
+                    this.wrongAnswersList.innerHTML = this.wrongAnswers.map(answer => `<li>${answer}</li>`).join('');
+                }
+            },
+
+            startTimer() {
+                this.stopTimer();
+                this.timeLeft = this.initialTime;
+                this.updateDisplay();
+                this.timerInterval = setInterval(() => {
+                    this.timeLeft--;
+                    this.updateDisplay();
+                    if (this.timeLeft <= 0) {
+                        this.handleTimerExpired();
+                    }
+                }, 1000);
+            },
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            },
+
+            handleTimerExpired() {
+                this.stopTimer();
+                this.livesRemainingDiv.innerHTML = `<b>Time's Up!</b> The correct translation was <b>"${this.currentSolution}"</b>.`;
+                this.blanksDisplay.innerHTML = `<span style="color: red;">${this.currentSolution}</span>`;
+                this.resultMessage.textContent = 'You earned 0 points for this round.'; // Clarify no points for timeout
+                this.endRoundAndProceed(3000); // Proceed to next word after 3 seconds
+            },
+
+            resetRoundState() {
+                this.playerLives = this.maxWrongAttempts;
+                this.wrongAnswers = [];
+                this.revealedLettersIndices = [];
+                this.updateHistoryPanel();
+            },
+
+            getNewWord() {
+                this.questionCount++;
+                this.resultMessage.textContent = '';
+                const inputToken = document.getElementById('tokenInput');
+                if (inputToken) {
+                    inputToken.value = '';
+                    inputToken.focus();
+                }
+
+                this.resetRoundState();
+                this.updateDisplay();
+
+                if (this.questionCount > this.remainingQuestions) {
+                    this.displayFinalScore();
+                    return;
+                }
+
+                if (this.candidateList.length === 0) {
+                    this.resultMessage.textContent = "No words available. Please check data source.";
+                    this.stopTimer();
+                    return;
+                }
+
+                let selectedPhrase;
+                let attempts = 0;
+                const maxAttempts = 100;
+                let foundValidPhrase = false;
+
+                while (attempts < maxAttempts && !foundValidPhrase) {
+                    const randomIndex = Math.floor(Math.random() * this.candidateList.length);
+                    selectedPhrase = this.candidateList[randomIndex];
+
+                    if (!selectedPhrase || selectedPhrase.length < 2) {
+                        attempts++;
+                        continue;
+                    }
+
+                    this.currentSolution = selectedPhrase[0].toLowerCase().trim();
+                    this.currentTokiPonaPhrase = selectedPhrase[1].replace(/\( /g, '(').replace(/ \)/g, ')').trim();
+
+                    const tokiPonaWords = this.currentTokiPonaPhrase.split(' ').map(word => word.replace(/[()]/g, ''));
+                    const allWordsHaveDefinitions = tokiPonaWords.every(word => word in this.dictionary);
+
+                    if (this.currentSolution.replace(/ /g, '').length > 0 && this.currentTokiPonaPhrase && allWordsHaveDefinitions) {
+                        foundValidPhrase = true;
+                    } else {
+                        attempts++;
+                    }
+                }
+
+                if (!foundValidPhrase) {
+                    console.error("Could not find a valid phrase with dictionary entries after multiple attempts.");
+                    this.resultMessage.textContent = "Error: Could not retrieve a valid question.";
+                    this.stopTimer();
+                    return;
+                }
+
+                this.renderBlanks();
+                this.tokiPhraseTranslation.innerHTML = `<b>Translate: </b>`;
+                this.renderTokiPonaPhrase();
+
+                this.startTimer();
+                this.updateDisplay();
+            },
+
+            renderBlanks() {
+                let blankHTML = [];
+                for (let i = 0; i < this.currentSolution.length; i++) {
+                    const char = this.currentSolution[i];
+                    if (char === ' ') {
+                        blankHTML.push('<span class="blank-space">&nbsp;</span>');
+                    } else if (this.revealedLettersIndices.includes(i)) {
+                        blankHTML.push(`<span class="revealed-letter">${char}</span>`);
+                    } else {
+                        blankHTML.push(`<span class="hidden-letter">_</span>`);
+                    }
+                }
+                this.blanksDisplay.innerHTML = blankHTML.join('');
+            },
+
+            renderTokiPonaPhrase() {
+                let tpTableHTML = '<table><tr>';
+                this.currentTokiPonaPhrase.split(' ').forEach(tokiWordRaw => {
+                    const wordClean = tokiWordRaw.replace(/[()]/g, '');
+                    const definition = this.dictionary[wordClean] || 'Definition not found';
+                    tpTableHTML += `
+                        <th>
+                            <div class="toki-word-hint-container">
+                                <div class="word-display">${tokiWordRaw}</div>
+                            </div>
+                            <div class="word-definition-tooltip">${definition}</div>
+                        </th>
+                    `;
+                });
+                tpTableHTML += '</tr></table>';
+                this.tokiPhraseContainer.innerHTML = tpTableHTML;
+            },
+
+            revealLetter() {
+                if (this.playerLives <= 1) { // Need at least 2 attempts to use this
+                    this.resultMessage.textContent = "You don't have enough attempts (need 2) to reveal a letter!";
+                    return;
+                }
+
+                const actualLettersInSolution = this.currentSolution.split('').filter(char => char !== ' ').length;
+                if (this.revealedLettersIndices.length === actualLettersInSolution) {
+                    this.resultMessage.textContent = "All letters are already revealed!";
+                    return;
+                }
+
+                let indexToReveal = -1;
+                for (let i = 0; i < this.currentSolution.length; i++) {
+                    if (this.currentSolution[i] !== ' ' && !this.revealedLettersIndices.includes(i)) {
+                        indexToReveal = i;
+                        break;
+                    }
+                }
+
+                if (indexToReveal !== -1) {
+                    this.revealedLettersIndices.push(indexToReveal);
+                    this.renderBlanks();
+
+                    this.playerLives -= 2;
+                    if (this.playerLives < 0) this.playerLives = 0; // Ensure lives don't go negative display
+                    this.updateDisplay();
+                    this.resultMessage.innerHTML = `A letter has been revealed! <b>Attempts left:</b> ${this.playerLives}`;
+
+                    // Check for short word auto-complete
+                    if (actualLettersInSolution < 5 && this.revealedLettersIndices.length === actualLettersInSolution) {
+                        this.stopTimer();
+                        const pointsEarned = this.playerLives; // Score based on attempts left *after* revealing and auto-completing
+                        this.currentScore += pointsEarned;
+                        this.updateDisplay(); // Update score display
+
+                        this.livesRemainingDiv.innerHTML = `<b>All letters revealed for this short word!</b> The correct translation was <b>"${this.currentSolution}"</b>.`;
+                        this.blanksDisplay.innerHTML = `<span style="color: blue;">${this.currentSolution}</span>`;
+                        this.resultMessage.textContent = `Round ended automatically. You earned <b>${pointsEarned} points</b>!`;
+                        this.endRoundAndProceed(3000);
+                        return; // Exit to prevent further checks if round already ended
+                    }
+
+                    if (this.playerLives <= 0) {
+                        this.stopTimer();
+                        this.livesRemainingDiv.innerHTML = `<b>Oops! You've run out of attempts!</b> The correct translation was <b>"${this.currentSolution}"</b>.`;
+                        this.blanksDisplay.innerHTML = `<span style="color: red;">${this.currentSolution}</span>`;
+                        this.resultMessage.textContent = 'You earned 0 points for this round.'; // Clarify no points for running out of attempts
+                        this.endRoundAndProceed(3000);
+                    }
+                } else {
+                    this.resultMessage.textContent = "All letters are already revealed!";
+                }
+            },
+
+            submitGuess() {
+                const inputElement = document.getElementById('tokenInput');
+                if (!inputElement) return;
+
+                const candidateWord = inputElement.value.trim().toLowerCase();
+
+                if (candidateWord === '') {
+                    this.resultMessage.textContent = "Please enter an answer.";
+                    inputElement.value = '';
+                    inputElement.focus();
+                    return;
+                }
+
+                if (candidateWord === this.currentSolution) {
+                    this.stopTimer();
+                    const pointsEarned = this.playerLives; // Score is attempts left
+                    this.currentScore += pointsEarned;
+                    
+                    this.updateDisplay();
+                    this.livesRemainingDiv.innerHTML = `<b>Correct! </b>"<b>${inputElement.value.trim()}</b>" is correct.`;
+                    this.blanksDisplay.innerHTML = `<span style="color: green;">${this.currentSolution}</span>`;
+                    this.resultMessage.innerHTML = `Congrats! "<b>${inputElement.value.trim()}</b>" is correct. You earned <b>${pointsEarned} points</b>!`;
+                    
+                    this.endRoundAndProceed(2000);
+                } else {
+                    this.playerLives -= 1;
+                    this.wrongAnswers.push(inputElement.value.trim());
+                    this.updateDisplay();
+                    this.updateHistoryPanel();
+                    this.resultMessage.innerHTML = `Sorry! <b>"${inputElement.value.trim()}"</b> is not correct.`;
+
+                    if (this.playerLives <= 0) {
+                        this.stopTimer();
+                        this.livesRemainingDiv.innerHTML = `<b>Oops! You've made too many wrong attempts.</b> The correct translation was <b>"${this.currentSolution}"</b>.`;
+                        this.blanksDisplay.innerHTML = `<span style="color: red;">${this.currentSolution}</span>`;
+                        this.resultMessage.textContent = 'You earned 0 points for this round.'; // Clarify no points for running out of attempts
+                        this.endRoundAndProceed(3000);
+                    }
+                }
+                inputElement.value = '';
+                inputElement.focus();
+            },
+
+            skipWord() {
+                this.stopTimer();
+                this.livesRemainingDiv.innerHTML = `<b>Skipped!</b> The correct translation was <b>"${this.currentSolution}"</b>.`;
+                this.blanksDisplay.innerHTML = `<span style="color: orange;">${this.currentSolution}</span>`;
+                this.resultMessage.textContent = 'You earned 0 points for this round.'; // Clarify no points for skipping
+                
+                this.endRoundAndProceed(3000);
+            },
+
+            endRoundAndProceed(delay) {
+                this.resetRoundState(); // Reset lives, history for the *next* word
+                setTimeout(() => this.getNewWord(), delay);
+            },
+
+            displayFinalScore() {
+                this.stopTimer();
+                this.lookupDiv.innerHTML = '';
+                this.livesRemainingDiv.innerHTML = '';
+                this.timeLeftDisplay.innerHTML = '';
+                this.blanksDisplay.innerHTML = '';
+                this.tokiPhraseContainer.innerHTML = '';
+                this.tokiPhraseTranslation.innerHTML = '';
+                this.resultMessage.innerHTML = '';
+                
+                this.resetRoundState(); // Clear history, etc. at end of game
+
+                this.scoreDisplay.innerHTML = `<h2><b>Your Final Score was ${this.currentScore}</b></h2><button id="restartGameBtn" style="margin-top:20px;">Play Again</button>`;
+                this.questionsRemaining.innerHTML = '';
+
+                document.getElementById('restartGameBtn').addEventListener('click', () => {
+                    // Reset game state for a new game
+                    this.currentScore = 0;
+                    this.questionCount = 0;
+                    this.timeLeft = this.initialTime;
+
+                    // Re-show start screen
+                    this.startScreen.style.display = 'block';
+                    this.gameInfo.style.display = 'none';
+                    this.gameContent.style.display = 'none';
+
+                    // Clear previous game content
+                    this.blanksDisplay.innerHTML = '&nbsp;';
+                    this.tokiPhraseTranslation.innerHTML = '';
+                    this.tokiPhraseContainer.innerHTML = '';
+                    this.lookupDiv.innerHTML = '';
+                    this.resultMessage.innerHTML = '&nbsp;';
+
+                    this.updateDisplay();
+                    this.updateHistoryPanel(); // Ensure history is cleared and updated
+                });
+            }
+        };
+
+        // Initialize the game when the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', () => game.init());
+    </script>
+</body>
+</html>
