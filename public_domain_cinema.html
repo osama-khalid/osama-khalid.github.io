@@ -1,0 +1,3655 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Media Player</title>
+<style>
+  :root {
+    --bg: #0b0b0f;
+    --panel: rgba(20, 20, 28, 0.82);
+    --accent: #e50914;
+    --accent-hi: #ff2630;
+    --text: #f5f5f7;
+    --muted: #b9b9c2;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ---------- Drop zone ---------- */
+  #drop-zone {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 24px;
+    background:
+      radial-gradient(1200px 600px at 50% 30%, rgba(229,9,20,0.15), transparent 60%),
+      linear-gradient(180deg, #0b0b0f 0%, #15151c 100%);
+    transition: background 120ms ease, box-shadow 120ms ease;
+    z-index: 10;
+  }
+  #drop-zone.drag-over,
+  #player.drag-over::before {
+    box-shadow: inset 0 0 0 3px var(--accent);
+  }
+  #drop-zone.drag-over {
+    background:
+      radial-gradient(1200px 600px at 50% 30%, rgba(229,9,20,0.35), transparent 60%),
+      linear-gradient(180deg, #14141c 0%, #1d1d28 100%);
+  }
+  #drop-zone h1 {
+    font-size: clamp(28px, 5vw, 56px);
+    margin: 0 0 12px;
+    letter-spacing: -0.02em;
+  }
+  #drop-zone p {
+    color: var(--muted);
+    font-size: 16px;
+    margin: 6px 0;
+    max-width: 620px;
+  }
+  /* video native subtitle styling — Medium is the default */
+  video::cue {
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: 22px;
+    line-height: 1.3;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  }
+  video.subs-small::cue  { font-size: 16px; }
+  video.subs-large::cue  { font-size: 32px; }
+  #drop-zone .icon {
+    font-size: 80px;
+    line-height: 1;
+    margin-bottom: 16px;
+    opacity: 0.85;
+  }
+  #pick-btn {
+    margin-top: 18px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 12px 22px;
+    font-size: 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 120ms ease, transform 120ms ease;
+  }
+  #pick-btn:hover { background: var(--accent-hi); }
+  #pick-btn:active { transform: translateY(1px); }
+  #file-input { display: none; }
+  .hint {
+    margin-top: 24px;
+    font-size: 12px;
+    color: #888;
+    line-height: 1.8;
+    max-width: 720px;
+  }
+  .hint kbd {
+    background: #2a2a35;
+    border: 1px solid #3a3a48;
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    color: #ddd;
+    margin: 0 2px;
+  }
+
+  /* ---------- Player ---------- */
+  #player {
+    position: fixed;
+    inset: 0;
+    display: none;
+    background: black;
+  }
+  #player.active { display: block; }
+  #player.drag-over { box-shadow: inset 0 0 0 4px var(--accent); }
+  #video {
+    width: 100%;
+    height: 100%;
+    background: black;
+    outline: none;
+  }
+
+  /* ---------- Controls ---------- */
+  #controls {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 16px 20px 14px;
+    background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.85) 100%);
+    transition: opacity 250ms ease, transform 250ms ease;
+    z-index: 5;
+  }
+  #controls.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+  }
+
+  #title-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 14px 20px;
+    background: linear-gradient(0deg, transparent 0%, rgba(0,0,0,0.8) 100%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 250ms ease, transform 250ms ease;
+    z-index: 5;
+  }
+  #title-bar.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-8px);
+  }
+  #title {
+    font-size: 15px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  .top-btn {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .top-btn:hover { background: rgba(255,255,255,0.1); }
+  .top-btn .badge {
+    background: var(--accent);
+    color: white;
+    border-radius: 10px;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* progress */
+  .progress-wrap {
+    position: relative;
+    height: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .progress-track {
+    width: 100%;
+    height: 4px;
+    background: rgba(255,255,255,0.25);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+    transition: height 120ms ease;
+  }
+  .progress-wrap:hover .progress-track { height: 6px; }
+  .progress-buffered {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    background: rgba(255,255,255,0.4);
+    width: 0%;
+  }
+  .progress-played {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    background: var(--accent);
+    width: 0%;
+  }
+  .progress-thumb {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform 120ms ease;
+    pointer-events: none;
+  }
+  .progress-wrap:hover .progress-thumb { transform: translate(-50%, -50%) scale(1); }
+
+  .seek-tooltip {
+    position: absolute;
+    bottom: 22px;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.85);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 100ms ease;
+    white-space: nowrap;
+  }
+  .progress-wrap:hover .seek-tooltip { opacity: 1; }
+
+  /* Q toggles a marker for EVERY annotation. Each marker has a yellow ▼
+     arrow on the slider at the cue's timestamp + a clickable text label
+     above it. Labels of close-together items are staggered into 4 rows
+     so they don't overlap. */
+  .annotation-tick {
+    position: absolute;
+    bottom: 8px;
+    transform: translateX(-50%);
+    cursor: pointer;
+    z-index: 5;
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    pointer-events: none;
+  }
+  .annotation-tick > * { pointer-events: auto; }
+  .annotation-tick-arrow {
+    color: #ffd64a;
+    font-size: 14px;
+    line-height: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+    transition: transform 120ms ease;
+  }
+  .annotation-tick-label {
+    background: rgba(20, 20, 28, 0.94);
+    color: #ffd64a;
+    border: 1px solid rgba(255, 214, 74, 0.45);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 3px;
+    /* Each row sits 22px higher than the one below — keeps overlapping
+       labels readable. CSS variable --row is set per element (0..3). */
+    transform: translateY(calc(var(--row, 0) * -22px));
+    transition: background 120ms ease, color 120ms ease;
+    pointer-events: auto;
+  }
+  .annotation-tick-label:hover {
+    background: var(--accent, #e50914);
+    color: white;
+    border-color: var(--accent, #e50914);
+  }
+  .annotation-tick:hover .annotation-tick-arrow {
+    transform: scale(1.4);
+  }
+
+  /* Q-key annotation preview marker on the progress bar */
+  #annotation-marker {
+    position: absolute;
+    bottom: 14px;
+    transform: translateX(-50%);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    z-index: 6;
+    pointer-events: none;
+  }
+  #annotation-marker.visible {
+    display: flex;
+    animation: annotation-pop 240ms ease;
+  }
+  #annotation-marker .annotation-label {
+    background: rgba(20, 20, 28, 0.96);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    cursor: pointer;
+    pointer-events: auto;
+    white-space: nowrap;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.55);
+    transition: background 120ms ease;
+  }
+  #annotation-marker .annotation-label:hover {
+    background: var(--accent, #e50914);
+  }
+  #annotation-marker .annotation-label .annotation-hint {
+    color: rgba(255,255,255,0.6);
+    font-weight: 400;
+    font-size: 11px;
+    margin-left: 8px;
+  }
+  #annotation-marker .annotation-arrow {
+    color: var(--accent, #e50914);
+    font-size: 18px;
+    line-height: 1;
+    margin-top: 3px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+  }
+  @keyframes annotation-pop {
+    from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  .controls-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .controls-left, .controls-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .controls-right { margin-left: auto; }
+
+  .ctrl-btn {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 120ms ease, transform 120ms ease;
+    padding: 0;
+  }
+  .ctrl-btn:hover:not(:disabled) { background: rgba(255,255,255,0.15); }
+  .ctrl-btn:active:not(:disabled) { transform: scale(0.92); }
+  .ctrl-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .ctrl-btn svg { width: 22px; height: 22px; fill: currentColor; }
+  .ctrl-btn.big svg { width: 28px; height: 28px; }
+
+  .time {
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 8px;
+    min-width: 100px;
+  }
+
+  /* volume */
+  .volume {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .volume-slider {
+    width: 0;
+    overflow: hidden;
+    transition: width 180ms ease;
+  }
+  .volume:hover .volume-slider,
+  .volume:focus-within .volume-slider { width: 90px; }
+  input[type=range].slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 90px;
+    height: 4px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range].slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+  input[type=range].slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+
+  /* speed menu */
+  .menu-wrap { position: relative; }
+  .menu {
+    position: absolute;
+    bottom: 50px;
+    right: 0;
+    background: var(--panel);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 6px;
+    min-width: 130px;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .menu.open { display: flex; }
+  .menu-title {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 4px 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .menu-item {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    text-align: left;
+    padding: 7px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .menu-item:hover { background: rgba(255,255,255,0.08); }
+  .menu-item.selected { color: var(--accent); }
+  .menu-item.selected::after { content: "✓"; }
+
+  /* center indicator */
+  #center-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.8);
+    min-width: 90px;
+    padding: 0 18px;
+    height: 90px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms ease, transform 200ms ease;
+    z-index: 6;
+  }
+  #center-indicator.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  #center-indicator .text {
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  /* error toast */
+  #error {
+    position: absolute;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #c0392b;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    max-width: 80%;
+    text-align: center;
+    z-index: 7;
+    display: none;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+  }
+  #error.show { display: block; }
+
+  /* ---------- Playlist drawer ---------- */
+  #playlist {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 360px;
+    max-width: 85vw;
+    background: var(--panel);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-left: 1px solid rgba(255,255,255,0.08);
+    transform: translateX(100%);
+    transition: transform 240ms ease;
+    z-index: 8;
+    display: flex;
+    flex-direction: column;
+  }
+  #playlist.open { transform: translateX(0); }
+  .pl-header {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+  .pl-header h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .pl-header .pl-actions { display: flex; gap: 6px; }
+  .pl-icon-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .pl-icon-btn:hover { background: rgba(255,255,255,0.08); }
+  .pl-icon-btn.danger:hover { background: rgba(229,9,20,0.2); border-color: var(--accent); }
+
+  .pl-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+  }
+  .pl-empty {
+    padding: 30px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .pl-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    margin-bottom: 2px;
+    transition: background 120ms ease;
+  }
+  .pl-item:hover { background: rgba(255,255,255,0.06); }
+  .pl-item.active {
+    background: rgba(229,9,20,0.18);
+  }
+  .pl-item .pl-num {
+    color: var(--muted);
+    font-size: 12px;
+    width: 22px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .pl-item.active .pl-num { color: var(--accent); }
+  .pl-item .pl-name {
+    flex: 1;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pl-item .pl-remove {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 100ms ease;
+    flex-shrink: 0;
+  }
+  .pl-item:hover .pl-remove { opacity: 1; }
+  .pl-item .pl-remove:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+  .pl-playing-icon {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    color: var(--accent);
+    display: none;
+  }
+  .pl-item.active .pl-playing-icon { display: inline-block; }
+  .pl-item.active .pl-num { display: none; }
+
+  .pl-footer {
+    padding: 10px 16px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  /* drag overlay hint */
+  #drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(229,9,20,0.18);
+    border: 3px dashed var(--accent);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9;
+    pointer-events: none;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  #player.drag-over #drop-overlay { display: flex; }
+
+  #player.idle { cursor: none; }
+
+  @media (max-width: 600px) {
+    .time { min-width: auto; font-size: 12px; }
+    .ctrl-btn { width: 36px; height: 36px; }
+    .ctrl-btn.big svg { width: 24px; height: 24px; }
+    #playlist { width: 100%; }
+  }
+
+  /* ---------- Home / catalogue view ---------- */
+  #home {
+    position: fixed; inset: 0; overflow-y: auto; display: none;
+    background: linear-gradient(180deg, #0b0b0f 0%, #15151c 100%);
+    color: var(--text); padding: 0 0 80px;
+    z-index: 9;
+  }
+  #home.active { display: block; }
+  .home-header {
+    position: sticky; top: 0;
+    background: rgba(11,11,15,0.95);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 18px 32px; display: flex; align-items: center; gap: 16px;
+    z-index: 2;
+  }
+  .home-header h1 {
+    margin: 0; font-size: 22px; letter-spacing: -0.01em; color: var(--accent);
+  }
+  .home-header .grow { flex: 1; }
+  .home-header input[type=search] {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text);
+    padding: 9px 14px; border-radius: 8px;
+    width: 320px; font-size: 14px; font-family: inherit;
+    outline: none; transition: border-color 120ms ease, background 120ms ease;
+  }
+  .home-header input[type=search]:focus {
+    border-color: var(--accent); background: rgba(255,255,255,0.12);
+  }
+  .home-header select, .home-header button {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text); padding: 9px 12px; border-radius: 8px;
+    font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  .home-header .top-link {
+    color: var(--muted, #a3a3b0);
+    text-decoration: none;
+    font-size: 13px;
+    padding: 7px 12px;
+    border-radius: 6px;
+    transition: color 120ms ease, background 120ms ease;
+  }
+  .home-header .top-link:hover {
+    color: var(--text, #fff);
+    background: rgba(255,255,255,0.06);
+  }
+  .home-header button:hover, .home-header select:hover {
+    background: rgba(255,255,255,0.14);
+  }
+
+  .filters {
+    padding: 18px 32px 4px;
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .filter-chip {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--muted);
+    padding: 6px 12px; border-radius: 999px;
+    font-size: 12px; cursor: pointer;
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .filter-chip:hover { color: var(--text); }
+  .filter-chip.active {
+    background: var(--accent); color: white; border-color: var(--accent);
+  }
+
+  #status {
+    padding: 6px 32px;
+    color: var(--muted); font-size: 12px;
+  }
+
+  .row {
+    margin: 24px 0 0;
+  }
+  .row h2 {
+    margin: 0 0 10px; padding: 0 32px;
+    font-size: 16px; font-weight: 600; color: var(--text);
+    text-transform: capitalize;
+  }
+  .row-cards {
+    display: flex; gap: 14px; padding: 4px 32px;
+    overflow-x: auto; scrollbar-width: none;
+    scroll-behavior: smooth;
+  }
+  .row-cards::-webkit-scrollbar { display: none; }
+
+  /* Netflix/HBO-style row arrows. Float over each row's left + right edges,
+     dim until you hover the row. */
+  .row-scroller {
+    position: relative;
+  }
+  .row-heading {
+    margin: 18px 32px 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .row-arrow {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 56px;
+    background: linear-gradient(90deg, rgba(15,15,22,0.92) 0%, rgba(15,15,22,0.4) 70%, rgba(15,15,22,0) 100%);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 32px;
+    line-height: 1;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 200ms ease, background 200ms ease;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .row-arrow-left { left: 0; }
+  .row-arrow-right {
+    right: 0;
+    background: linear-gradient(270deg, rgba(15,15,22,0.92) 0%, rgba(15,15,22,0.4) 70%, rgba(15,15,22,0) 100%);
+  }
+  .row-scroller:hover .row-arrow:not(.disabled) { opacity: 1; }
+  .row-arrow:hover { background-color: rgba(0,0,0,0.4); }
+  .row-arrow.disabled { display: none; }
+
+  .card {
+    flex: 0 0 200px;
+    background: #1a1a22;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 180ms ease, box-shadow 180ms ease;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+  .card:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 12px 32px rgba(229,9,20,0.25);
+    z-index: 1;
+  }
+  .card .poster {
+    aspect-ratio: 2 / 3;
+    background: linear-gradient(135deg, #2a2235 0%, #15151c 100%);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .card .poster-img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 240ms ease;
+  }
+  .card .poster-img.loaded { opacity: 1; }
+  .card .poster .rating-badge,
+  .card .poster .runtime-badge,
+  .card .poster .play-overlay { z-index: 2; }
+  .card .poster::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.5) 100%);
+    z-index: 1;
+    pointer-events: none;
+  }
+  .card .progress-strip {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.18);
+    z-index: 3;
+  }
+  .card .progress-strip-fill {
+    height: 100%;
+    background: var(--accent, #e50914);
+  }
+  .card .poster .play-overlay {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(229,9,20,0.92);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 180ms ease;
+  }
+  .card:hover .poster .play-overlay { opacity: 1; }
+  .card .poster .play-overlay::after {
+    content: ""; display: block;
+    border-style: solid;
+    border-width: 8px 0 8px 13px;
+    border-color: transparent transparent transparent #fff;
+    margin-left: 3px;
+  }
+  .card .poster .runtime-badge {
+    position: absolute; top: 8px; right: 8px;
+    background: rgba(0,0,0,0.7); color: white;
+    padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
+  }
+  .card .poster .rating-badge {
+    position: absolute; bottom: 8px; left: 8px;
+    background: rgba(0,0,0,0.78);
+    color: #ffcd3c; padding: 2px 8px;
+    border-radius: 4px; font-size: 11px; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+  .card .meta {
+    padding: 10px 12px 12px;
+    display: flex; flex-direction: column; gap: 4px;
+    flex: 1;
+  }
+  .card .title {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .card .sub {
+    font-size: 11px; color: var(--muted);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .card .sub .dot::before { content: "·"; padding: 0 2px; }
+
+  /* Hero section */
+  .hero {
+    margin: 28px 32px 8px; padding: 28px 32px;
+    background:
+      radial-gradient(800px 400px at 20% 50%, rgba(229,9,20,0.18), transparent 60%),
+      linear-gradient(135deg, #1a1a25 0%, #15151c 100%);
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.05);
+    display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+  }
+  .hero .hero-info {
+    flex: 1; min-width: 260px;
+  }
+  .hero h2 {
+    margin: 0 0 8px; font-size: 28px;
+    letter-spacing: -0.01em;
+  }
+  .hero .hero-meta {
+    color: var(--muted); font-size: 13px;
+    margin-bottom: 12px;
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .hero .hero-meta .pill {
+    background: rgba(255,255,255,0.06);
+    padding: 2px 8px; border-radius: 4px;
+  }
+  .hero p {
+    color: var(--text); font-size: 14px; line-height: 1.6;
+    margin: 0 0 16px; max-width: 720px;
+  }
+  .hero button {
+    background: var(--accent); color: white;
+    border: none; padding: 12px 22px; border-radius: 6px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .hero button:hover { background: var(--accent-hi); }
+  .hero button::before {
+    content: ""; display: inline-block;
+    border-style: solid;
+    border-width: 6px 0 6px 10px;
+    border-color: transparent transparent transparent white;
+  }
+
+  /* About page (philosophy + Q shortcut + author link) */
+  #about {
+    position: fixed; inset: 0;
+    background: var(--bg, #0f0f16);
+    z-index: 60;
+    overflow-y: auto;
+    display: none;
+    padding: 80px 40px 60px;
+  }
+  #about.active { display: block; }
+  .about-content {
+    max-width: 720px;
+    margin: 0 auto;
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .about-content h1 {
+    font-size: 38px; margin: 0 0 20px;
+  }
+  .about-content h2 {
+    font-size: 18px;
+    margin: 28px 0 8px;
+    color: var(--text);
+  }
+  .about-content p {
+    color: var(--muted, #a3a3b0);
+    font-size: 15px;
+    margin: 0 0 14px;
+  }
+  .about-content .about-lead {
+    font-size: 17px;
+    color: var(--text);
+    margin-bottom: 28px;
+  }
+  .about-content a {
+    color: var(--accent, #e50914);
+    text-decoration: none;
+  }
+  .about-content a:hover { text-decoration: underline; }
+  .about-content kbd {
+    background: #2a2a35;
+    border: 1px solid #3a3a48;
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  .about-content code {
+    background: rgba(255,255,255,0.08);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+  }
+
+  /* Movie detail view (Netflix/Plex-style) — shown when a card is
+     clicked; play starts only when the user clicks the Play button. */
+  #detail {
+    position: fixed; inset: 0;
+    background: var(--bg, #0f0f16);
+    z-index: 50;
+    overflow-y: auto;
+    display: none;
+  }
+  #detail.active { display: block; }
+  .detail-backdrop {
+    position: relative;
+    min-height: 60vh;
+    background-size: cover;
+    background-position: center;
+    background-color: #1a1a22;
+    display: flex; align-items: flex-end;
+    padding: 64px 56px 36px;
+  }
+  .detail-backdrop::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(15,15,22,0.45) 0%, rgba(15,15,22,0.85) 70%, var(--bg, #0f0f16) 100%),
+                linear-gradient(90deg, rgba(15,15,22,0.85) 0%, rgba(15,15,22,0.4) 60%, rgba(15,15,22,0.2) 100%);
+    pointer-events: none;
+  }
+  .detail-info {
+    position: relative;
+    max-width: 760px;
+    z-index: 1;
+    color: var(--text);
+  }
+  .detail-info h1 {
+    margin: 0 0 12px;
+    font-size: 44px; line-height: 1.1; font-weight: 700;
+    text-shadow: 0 2px 16px rgba(0,0,0,0.6);
+  }
+  .detail-meta {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 16px; font-size: 13px;
+  }
+  .detail-meta .pill {
+    background: rgba(255,255,255,0.10);
+    padding: 3px 10px; border-radius: 4px;
+    color: var(--text);
+  }
+  .detail-meta .pill.rating { color: #ffcd3c; font-weight: 700; }
+  .detail-plot {
+    color: var(--text);
+    font-size: 15px; line-height: 1.55;
+    margin: 0 0 22px;
+    max-width: 720px;
+  }
+  .detail-actions {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .detail-play {
+    background: var(--accent, #e50914); color: white;
+    border: none; padding: 12px 28px; border-radius: 6px;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .detail-play:hover { background: var(--accent-hi, #f6121d); }
+  .detail-play::before {
+    content: ""; display: inline-block;
+    border-style: solid;
+    border-width: 7px 0 7px 12px;
+    border-color: transparent transparent transparent #fff;
+  }
+  .detail-secondary {
+    background: rgba(255,255,255,0.18); color: white;
+    border: none; padding: 12px 22px; border-radius: 6px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    text-decoration: none;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .detail-secondary:hover { background: rgba(255,255,255,0.28); }
+  .detail-wiki-btn::before {
+    content: "W";
+    display: inline-block;
+    width: 18px; height: 18px;
+    border-radius: 3px;
+    background: white; color: #111;
+    font-weight: 800; font-family: serif;
+    font-size: 12px;
+    text-align: center;
+    line-height: 18px;
+  }
+  .detail-cast {
+    color: var(--muted, #9ca3af);
+    font-size: 13px; max-width: 720px;
+  }
+  .detail-cast strong { color: var(--text); margin-right: 4px; }
+  .detail-close {
+    position: fixed; top: 16px; left: 16px;
+    z-index: 10;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(0,0,0,0.6);
+    color: white; border: none;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .detail-close:hover { background: rgba(0,0,0,0.85); }
+  .detail-close svg { width: 22px; height: 22px; fill: currentColor; }
+  .detail-related {
+    padding: 24px 32px 56px;
+  }
+  .detail-related h2 {
+    margin: 8px 24px 12px;
+    font-size: 20px; font-weight: 600;
+  }
+  .detail-related .row-cards {
+    padding: 4px 24px;
+  }
+
+  .home-footer {
+    margin: 32px 32px 0;
+    padding: 16px 0;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    color: var(--muted); font-size: 12px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!--
+  Catalogue + SRTs are loaded as classic <script> from jsDelivr's GitHub CDN.
+  Classic scripts bypass CORS, so this works EVEN when index.html is opened
+  via file:// (no server needed). They run BEFORE the inline script below
+  so window.CATALOGUE / window.SRT_DATA are populated when loadCatalogue() runs.
+-->
+<script src="https://cdn.jsdelivr.net/gh/osama-website/publicdomainfilms@main/public_domain_movies.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/osama-website/publicdomainfilms@main/srt_data.js"></script>
+
+<section id="home">
+  <div class="home-header">
+    <h1>Public Domain Cinema</h1>
+    <div class="grow"></div>
+    <input id="search" type="search" placeholder="Search title, genre, dialogue…" autocomplete="off" />
+    <select id="sort">
+      <option value="rating">Sort: Rating ↓</option>
+      <option value="year-desc">Year ↓</option>
+      <option value="year-asc">Year ↑</option>
+      <option value="title">Title (A→Z)</option>
+    </select>
+    <a href="#about" id="about-link" class="top-link">About</a>
+  </div>
+  <div class="filters" id="genre-chips"></div>
+  <div id="status">Loading catalogue…</div>
+  <div id="hero-slot"></div>
+  <div id="rows"></div>
+</section>
+
+<!-- About page (philosophy + Q shortcut explanation + author link) -->
+<section id="about" aria-hidden="true">
+  <button class="detail-close" id="about-close-btn" aria-label="Home" title="Home">
+    <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+  </button>
+  <div class="about-content">
+  <h1>About</h1>
+  <p class="about-lead">
+    A video streaming experience for public-domain movies. Public-domain cinema is a strange, sprawling library: forgotten classics, weird experiments, and films whose copyright lapsed by accident or design. 
+    Every film here is free for anyone to watch and share. You can also <strong>drag and drop your own local video and subtitle files</strong> to use this as a private, offline media player.
+  </p>
+  <p>
+    No accounts, no ads, no tracking. The built-in catalogue is sourced from
+    <a href="https://archive.org/details/publicmovies212" target="_blank" rel="noopener">archive.org</a> and
+    <a href="https://publicdomainmovie.net" target="_blank" rel="noopener">publicdomainmovie.net</a>.
+  </p>
+  <p>
+    Everything runs directly in your browser: the catalogue, the search index, and the resume-watching memory. There is no backend, no server-side processing, and absolutely no tracking.
+  </p>
+
+  <h2>Wikipedia in the subtitles</h2>
+  <p>
+    Have you ever paused a movie to look up a historical figure, an obscure event, or a complex concept mentioned in the dialogue? To save you the trouble, every film in this catalogue has been enriched with hidden Wikipedia annotations to provide instant context.
+  </p> 
+
+  <h2>The <kbd>Q</kbd> and <kbd>W</kbd> shortcuts</h2>
+  <p>
+    Press <kbd>Q</kbd> at any point during playback to reveal markers on the progress bar for every annotated subject. Press <kbd>W</kbd> to instantly pause the film and open the Wikipedia article closest to your current timestamp.
+  </p>
+
+  <h2>Built by</h2>
+  <p>
+    <a href="https://osamakhalid.org/" target="_blank" rel="noopener">
+      Osama Khalid &nbsp;→&nbsp; osamakhalid.org
+    </a>
+  </p>
+</div>
+</section>
+
+<div id="drop-zone">
+  <div class="icon">🎬</div>
+  <h1>Drop movies to play</h1>
+  <p>Drag and drop one or more video files anywhere on this window — they'll be added to a playlist. Works best with <strong>.mp4</strong> and <strong>.webm</strong>. <strong>.mkv</strong> may work depending on the codec.</p>
+  <button id="pick-btn">Choose files</button>
+  <input id="file-input" type="file" accept="video/*,.mkv,.srt,.vtt" multiple />
+  <input id="sub-input" type="file" accept=".srt,.vtt" multiple style="display:none" />
+  <p class="hint">
+    <kbd>Space</kbd> play/pause &nbsp;
+    <kbd>←</kbd>/<kbd>→</kbd> seek 10s &nbsp;
+    <kbd>⌘</kbd>+<kbd>←</kbd>/<kbd>⌘</kbd>+<kbd>→</kbd> prev / next track &nbsp;
+    <kbd>↑</kbd>/<kbd>↓</kbd> volume &nbsp;
+    <kbd>M</kbd> mute &nbsp;
+    <kbd>F</kbd> fullscreen &nbsp;
+    <kbd>C</kbd> captions &nbsp;
+    <kbd>Q</kbd> Wikipedia &nbsp;
+    <kbd>,</kbd>/<kbd>.</kbd> speed &nbsp;
+    <kbd>0</kbd>–<kbd>9</kbd> jump to % &nbsp;
+  </p>
+  <p class="hint" style="margin-top:6px;">
+    Subtitles: drop <strong>.srt</strong> or <strong>.vtt</strong> files alongside videos — paired by filename.
+    Wikipedia: any URL inside an SRT cue is captured as an annotation. Press <kbd>Q</kbd> anywhere to pause and open the closest one.
+    <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> (or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>) wipes saved state.
+  </p>
+</div>
+
+<div id="player">
+  <video id="video" preload="metadata"></video>
+
+  <div id="error"></div>
+
+  <div id="center-indicator"><span class="text"></span></div>
+
+  <div id="drop-overlay">Drop to add to playlist</div>
+
+  <div id="title-bar">
+    <button class="top-btn nav-back-btn" id="nav-back-btn" title="Back to catalogue">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      Back
+    </button>
+    <div id="title"></div>
+    <button class="top-btn" id="close-btn" title="Close (Esc)" style="display:none">✕ Close</button>
+  </div>
+
+  <div id="controls">
+    <div class="progress-wrap" id="progress">
+      <div class="progress-track">
+        <div class="progress-buffered" id="buffered"></div>
+        <div class="progress-played" id="played"></div>
+      </div>
+      <div class="progress-thumb" id="thumb"></div>
+      <div class="seek-tooltip" id="seek-tooltip">0:00</div>
+      <div id="annotation-marker">
+        <span class="annotation-label" id="annotation-label"></span>
+        <span class="annotation-arrow">▼</span>
+      </div>
+    </div>
+
+    <div class="controls-row">
+      <div class="controls-left">
+        <button class="ctrl-btn" id="prev-btn" title="Previous (⌘←)">
+          <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+        </button>
+        <button class="ctrl-btn big" id="play-btn" title="Play/Pause (Space)">
+          <svg id="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <button class="ctrl-btn" id="next-btn" title="Next (⌘→)">
+          <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6z"/></svg>
+        </button>
+        <button class="ctrl-btn" id="back-btn" title="Back 10s (←)">
+          <svg viewBox="0 0 24 24"><path d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8zm-1.1 11h-.85v-3.26l-1.01.31v-.69l1.77-.63h.09V16zm4.28-1.76c0 .32-.03.6-.1.82s-.17.42-.29.57-.28.26-.45.33-.37.1-.59.1-.41-.03-.59-.1-.33-.18-.46-.33-.23-.34-.3-.57-.11-.5-.11-.82v-.74c0-.32.03-.6.1-.82s.17-.42.29-.57.28-.26.45-.33.37-.1.59-.1.41.03.59.1.33.18.46.33.23.34.3.57.11.5.11.82v.74zm-.85-.86c0-.19-.01-.35-.04-.48s-.07-.23-.12-.31-.11-.14-.19-.17-.16-.05-.25-.05-.18.02-.25.05-.14.09-.19.17-.09.18-.12.31-.04.29-.04.48v.97c0 .19.01.35.04.48s.07.24.12.32.11.14.19.17.16.05.25.05.18-.02.25-.05.14-.09.19-.17.09-.19.11-.32.04-.29.04-.48v-.97z"/></svg>
+        </button>
+        <button class="ctrl-btn" id="fwd-btn" title="Forward 10s (→)">
+          <svg viewBox="0 0 24 24"><path d="M4 13c0 4.42 3.58 8 8 8s8-3.58 8-8h-2c0 3.31-2.69 6-6 6s-6-2.69-6-6 2.69-6 6-6v4l5-5-5-5v4c-4.42 0-8 3.58-8 8zm6.89 3H10v-3.26l-1 .31v-.69l1.77-.63h.12V16zm5-2.42v.84c0 .32-.03.6-.1.82s-.17.42-.29.57-.28.26-.45.33-.37.1-.59.1-.41-.03-.59-.1-.33-.18-.46-.33-.23-.34-.3-.57-.11-.5-.11-.82v-.84c0-.32.03-.6.1-.82s.17-.42.29-.57.28-.26.45-.33.37-.1.59-.1.41.03.59.1.33.18.46.33.23.34.3.57.11.5.11.82zm-.85-.86c0-.19-.01-.35-.04-.48s-.07-.23-.12-.31-.11-.14-.19-.17-.16-.05-.25-.05-.18.02-.25.05-.14.09-.19.17-.09.18-.12.31-.04.29-.04.48v.97c0 .19.01.35.04.48s.07.24.12.32.11.14.19.17.16.05.25.05.18-.02.25-.05.14-.09.19-.17.09-.19.11-.32.04-.29.04-.48v-.97z"/></svg>
+        </button>
+        <div class="volume">
+          <button class="ctrl-btn" id="mute-btn" title="Mute (M)">
+            <svg id="vol-icon" viewBox="0 0 24 24"></svg>
+          </button>
+          <div class="volume-slider">
+            <input type="range" min="0" max="1" step="0.01" value="1" id="volume" class="slider" title="Volume" />
+          </div>
+        </div>
+        <span class="time"><span id="cur">0:00</span> / <span id="dur">0:00</span></span>
+      </div>
+
+      <div class="controls-right">
+        <button class="ctrl-btn" id="pl-toggle-btn" title="Playlist (L)" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M3 13h12v-2H3v2zm0 4h12v-2H3v2zm0-8h12V7H3v2zm14 0l4-4-1.41-1.41L17 6.17l-2.59-2.58L13 5l4 4z"/></svg>
+        </button>
+        <div class="menu-wrap">
+          <button class="ctrl-btn" id="cc-btn" title="Subtitles / captions (C)">
+            <svg id="cc-icon" viewBox="0 0 24 24"><path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.89-2-2-2zm0 14H5V6h14v12zM7 15h3v-1.5H7.5v-3H10V9H7c-.55 0-1 .45-1 1v4c0 .55.45 1 1 1zm6.5 0h3v-1.5H14v-3h2.5V9h-3c-.55 0-1 .45-1 1v4c0 .55.45 1 1 1z"/></svg>
+          </button>
+          <div class="menu" id="cc-menu">
+            <div class="menu-title">Subtitles</div>
+            <div id="cc-list"></div>
+            <div style="border-top:1px solid rgba(255,255,255,0.08); margin: 4px 0;"></div>
+            <div class="menu-title">Size</div>
+            <button class="menu-item" data-size="small">Small</button>
+            <button class="menu-item selected" data-size="medium">Medium</button>
+            <button class="menu-item" data-size="large">Large</button>
+            <div style="border-top:1px solid rgba(255,255,255,0.08); margin: 4px 0;"></div>
+            <button class="menu-item" id="cc-add">+ Add subtitle file…</button>
+          </div>
+        </div>
+        <div class="menu-wrap">
+          <button class="ctrl-btn" id="speed-btn" title="Playback speed">
+            <svg viewBox="0 0 24 24"><path d="M10 8v8l6-4-6-4zm2-6C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+          </button>
+          <div class="menu" id="speed-menu">
+            <div class="menu-title">Speed</div>
+            <button class="menu-item" data-speed="0.5">0.5×</button>
+            <button class="menu-item" data-speed="0.75">0.75×</button>
+            <button class="menu-item selected" data-speed="1">Normal</button>
+            <button class="menu-item" data-speed="1.25">1.25×</button>
+            <button class="menu-item" data-speed="1.5">1.5×</button>
+            <button class="menu-item" data-speed="2">2×</button>
+          </div>
+        </div>
+        <button class="ctrl-btn" id="fs-btn" title="Fullscreen (F)">
+          <svg id="fs-icon" viewBox="0 0 24 24"></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+</div>
+
+<!-- Movie detail (Netflix/Plex-style intermediate view) -->
+<section id="detail" aria-hidden="true">
+  <button class="detail-close" id="detail-close-btn" aria-label="Home" title="Home">
+    <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+  </button>
+  <div class="detail-backdrop" id="detail-backdrop">
+    <div class="detail-info">
+      <h1 class="detail-title" id="detail-title"></h1>
+      <div class="detail-meta" id="detail-meta"></div>
+      <p class="detail-plot" id="detail-plot"></p>
+      <div class="detail-actions">
+        <button class="detail-play" id="detail-play-btn">Play</button>
+        <a class="detail-secondary detail-wiki-btn" id="detail-wiki-btn" target="_blank" rel="noopener" style="display:none">Wikipedia</a>
+      </div>
+      <div class="detail-cast" id="detail-cast"></div>
+    </div>
+  </div>
+  <div class="detail-related">
+    <h2>More like this</h2>
+    <div class="row-cards" id="detail-recs-cards"></div>
+  </div>
+</section>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const dropZone   = $("drop-zone");
+  const fileInput  = $("file-input");
+  const pickBtn    = $("pick-btn");
+  const player     = $("player");
+  const video      = $("video");
+  const titleEl    = $("title");
+  const closeBtn   = $("close-btn");
+  const controls   = $("controls");
+  const titleBar   = $("title-bar");
+  const playBtn    = $("play-btn");
+  const playIcon   = $("play-icon");
+  const prevBtn    = $("prev-btn");
+  const nextBtn    = $("next-btn");
+  const backBtn    = $("back-btn");
+  const fwdBtn     = $("fwd-btn");
+  const muteBtn    = $("mute-btn");
+  const volIcon    = $("vol-icon");
+  const volume     = $("volume");
+  const cur        = $("cur");
+  const dur        = $("dur");
+  const progress   = $("progress");
+  const played     = $("played");
+  const buffered   = $("buffered");
+  const thumb      = $("thumb");
+  const seekTooltip= $("seek-tooltip");
+  const speedBtn   = $("speed-btn");
+  const speedMenu  = $("speed-menu");
+  const pipBtn     = null; /* removed */
+  const fsBtn      = $("fs-btn");
+  const fsIcon     = $("fs-icon");
+  const errorEl    = $("error");
+  const centerIndicator = $("center-indicator");
+  const playlistEl = $("playlist");
+  const playlistBtn= $("playlist-btn");
+  const plToggleBtn= $("pl-toggle-btn");
+  const plList     = $("pl-list");
+  const plCount    = $("pl-count");
+  const plClose    = $("pl-close");
+  const plAdd      = $("pl-add");
+  const plClear    = $("pl-clear");
+  const ccBtn      = $("cc-btn");
+  const ccMenu     = $("cc-menu");
+  const ccList     = $("cc-list");
+  const ccAdd      = $("cc-add");
+  const subInput   = $("sub-input");
+
+  /* SVG paths */
+  const PLAY_PATH  = "M8 5v14l11-7z";
+  const PAUSE_PATH = "M6 5h4v14H6zM14 5h4v14h-4z";
+  const FS_ENTER   = "M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z";
+  const FS_EXIT    = "M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z";
+  const VOL_HIGH   = "M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z";
+  const VOL_LOW    = "M7 9v6h4l5 5V4l-5 5H7zm9.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z";
+  const VOL_MUTE   = "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z";
+
+  /* ---------- State ---------- */
+  /** @type {{file: File, url: string, name: string, subtitles: {label: string, vttBlob: Blob, vttUrl: string}[], annotations: {start:number,end:number,title:string,url:string}[]}[]} */
+  const playlist = [];
+  let currentIndex = -1;
+  let controlsTimer = null;
+  let lastVolume = 1;
+  let isScrubbing = false;
+  let dragCounter = 0;
+  /** index into current item's subtitles, -1 = off */
+  let activeSubIndex = -1;
+
+  /* ---------- Helpers ---------- */
+  function isVideoFile(file) {
+    return (file.type.startsWith("video/") && !isSubtitleFile(file)) ||
+           /\.(mkv|mp4|webm|mov|m4v|ogg|ogv|avi|wmv|flv)$/i.test(file.name);
+  }
+  function isSubtitleFile(file) {
+    return /\.(srt|vtt)$/i.test(file.name);
+  }
+  function baseName(name) {
+    return name.replace(/\.[^.]+$/, "");
+  }
+  /** Convert "HH:MM:SS,mmm" or "HH:MM:SS.mmm" → seconds. */
+  function parseTimestamp(s) {
+    const m = s.match(/(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/);
+    if (!m) return null;
+    return (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 1000;
+  }
+  function readFileText(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload  = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.readAsText(file);
+    });
+  }
+  /**
+   * Process an SRT or VTT subtitle file, extracting any URLs from cue text
+   * (used as Wikipedia annotations) and producing a clean WebVTT string.
+   * URLs are removed from the displayed text.
+   */
+  function processSubtitleText(rawText, isVtt) {
+    const text = rawText.replace(/\r+/g, "");
+    const blocks = text.split(/\n\s*\n/);
+    const annotations = [];
+    const outBlocks = [];
+    const urlRe = /\bhttps?:\/\/[^\s<>"'{}]+/g;
+
+    for (const block of blocks) {
+      if (!block.trim()) continue;
+      if (block.trim().startsWith("WEBVTT")) continue;
+
+      const lines = block.split("\n");
+      let tsIdx = lines.findIndex((l) => l.includes("-->"));
+      if (tsIdx < 0) {
+        outBlocks.push(block);
+        continue;
+      }
+      if (!isVtt) {
+        lines[tsIdx] = lines[tsIdx].replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
+      }
+      const tsM = lines[tsIdx].match(/(\d{1,2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}\.\d{3})/);
+      if (!tsM) {
+        outBlocks.push(lines.join("\n"));
+        continue;
+      }
+      const start = parseTimestamp(tsM[1]);
+      const end   = parseTimestamp(tsM[2]);
+
+      const headerLines = lines.slice(0, tsIdx + 1);
+      const textLines   = lines.slice(tsIdx + 1);
+      const cleanedTextLines = [];
+      for (const line of textLines) {
+        /* URLs may be bare or wrapped in {…} (the latter is invisible in
+           VLC / MPV / ffmpeg, since they strip ASS-style override blocks). */
+        const matches = line.match(urlRe) || [];
+        for (let url of matches) {
+          url = url.replace(/[)\].,;:!?"'}]+$/, "");
+          let title = url;
+          const wm = url.match(/\/wiki\/([^?#]+)/);
+          if (wm) {
+            try { title = decodeURIComponent(wm[1].replace(/_/g, " ")); } catch {}
+          }
+          annotations.push({ start, end, url, title });
+        }
+        let cleaned = line.replace(/\{[^{}]*\}/g, "");
+        cleaned = cleaned.replace(urlRe, "");
+        cleaned = cleaned.replace(/[ \t]+/g, " ").trim();
+        if (cleaned) cleanedTextLines.push(cleaned);
+      }
+      if (cleanedTextLines.length === 0) continue;
+      outBlocks.push([...headerLines, ...cleanedTextLines].join("\n"));
+    }
+
+    return {
+      vtt: "WEBVTT\n\n" + outBlocks.join("\n\n") + "\n",
+      annotations
+    };
+  }
+  /** Returns the WebVTT Blob, its object URL, and any extracted annotations. */
+  async function fileToVtt(file) {
+    const text = await readFileText(file);
+    const isVtt = /\.vtt$/i.test(file.name);
+    const { vtt, annotations } = processSubtitleText(text, isVtt);
+    const blob = new Blob([vtt], { type: "text/vtt" });
+    return { vttBlob: blob, vttUrl: URL.createObjectURL(blob), annotations };
+  }
+  function fmt(t) {
+    if (!isFinite(t) || t < 0) t = 0;
+    const h = Math.floor(t / 3600);
+    const m = Math.floor((t % 3600) / 60);
+    const s = Math.floor(t % 60);
+    const pad = (n) => String(n).padStart(2, "0");
+    return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  }
+
+  /* ---------- Errors ---------- */
+  function showError(msg) {
+    errorEl.textContent = msg;
+    errorEl.classList.add("show");
+    clearTimeout(showError._t);
+    showError._t = setTimeout(() => errorEl.classList.remove("show"), 5000);
+  }
+  function hideError() { errorEl.classList.remove("show"); }
+
+  video.addEventListener("error", () => {
+    const err = video.error;
+    // Step 1: if a catalogue movie has a backup URL we haven't tried yet,
+    // automatically swap to it before surfacing any error.
+    if (currentCatalogueMovie
+        && currentCatalogueMovie._mp4_tried === "primary"
+        && currentCatalogueMovie.mp4_url_backup
+        && currentCatalogueMovie.mp4_url_backup !== currentCatalogueMovie.mp4_url) {
+      currentCatalogueMovie._mp4_tried = "backup";
+      flashIndicator("trying backup source…");
+      const t = video.currentTime || 0;
+      video.src = currentCatalogueMovie.mp4_url_backup;
+      const seekOnce = () => {
+        try { if (t > 0) video.currentTime = t; } catch (_) {}
+        video.removeEventListener("loadedmetadata", seekOnce);
+      };
+      video.addEventListener("loadedmetadata", seekOnce);
+      video.play().catch(() => {});
+      return;
+    }
+    // Step 2: both sources failed (or no backup) — show a friendly toast.
+    let msg = "Couldn't play this file.";
+    if (err) {
+      if (err.code === 4) msg = "This file uses a codec your browser can't decode (often h.265, AVI/Xvid, or DivX).";
+      else if (err.code === 3) msg = "The video is corrupted or couldn't be decoded.";
+      else if (err.code === 2) msg = "A network error occurred while streaming the video.";
+    }
+    if (currentCatalogueMovie) {
+      const src = currentCatalogueMovie.source || currentCatalogueMovie.mp4_url;
+      if (src) {
+        msg += ` <a href="${src}" target="_blank" rel="noopener" style="color:#fff;text-decoration:underline;">Open on archive.org →</a> (download and play in VLC if your browser can't decode it).`;
+        errorEl.innerHTML = msg;
+        errorEl.classList.add("show");
+        clearTimeout(showError._t);
+        showError._t = setTimeout(() => errorEl.classList.remove("show"), 12000);
+        return;
+      }
+    }
+    showError(msg);
+  });
+
+  /* ---------- Playlist ---------- */
+  async function addFiles(fileList) {
+    const all = Array.from(fileList);
+    const videos = all.filter(isVideoFile);
+    const subs   = all.filter(isSubtitleFile);
+
+    if (videos.length === 0 && subs.length === 0) {
+      showError("No playable video or subtitle files in that drop.");
+      return;
+    }
+
+    videos.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    const wasEmpty = playlist.length === 0;
+    const newItems = videos.map((file) => ({
+      file,
+      url: URL.createObjectURL(file),
+      name: file.name,
+      subtitles: [],
+      annotations: []
+    }));
+    playlist.push(...newItems);
+
+    /* Pair subtitles by basename; otherwise attach to the current item. */
+    if (subs.length) {
+      for (const subFile of subs) {
+        const subBase = baseName(subFile.name).toLowerCase();
+        let target = newItems.find((it) => baseName(it.name).toLowerCase() === subBase) ||
+                     playlist.find((it) => baseName(it.name).toLowerCase() === subBase);
+        if (!target) {
+          if (currentIndex >= 0) target = playlist[currentIndex];
+          else if (newItems.length) target = newItems[0];
+          else if (playlist.length) target = playlist[0];
+        }
+        if (!target) {
+          showError(`No video to attach "${subFile.name}" to. Drop a video first.`);
+          continue;
+        }
+        try {
+          const { vttBlob, vttUrl, annotations: subAnns } = await fileToVtt(subFile);
+          target.subtitles.push({ label: subFile.name, vttBlob, vttUrl });
+          if (subAnns && subAnns.length) {
+            mergeAnnotations(target, subAnns);
+            flashIndicator(`📖 ${subAnns.length} Wikipedia link${subAnns.length > 1 ? "s" : ""} found`);
+          }
+        } catch {
+          showError(`Couldn't read subtitle file "${subFile.name}".`);
+        }
+      }
+    }
+
+    renderPlaylist();
+    if (wasEmpty && newItems.length) {
+      playIndex(0);
+    } else if (currentIndex >= 0 && subs.length) {
+      /* refresh tracks for the currently playing item */
+      loadSubtitleTracks(playlist[currentIndex]);
+      renderCcMenu();
+    }
+    savePlaylist();
+  }
+
+  function removeAt(index) {
+    if (index < 0 || index >= playlist.length) return;
+    const item = playlist[index];
+    URL.revokeObjectURL(item.url);
+    item.subtitles.forEach((s) => URL.revokeObjectURL(s.vttUrl));
+    playlist.splice(index, 1);
+    if (playlist.length === 0) {
+      currentIndex = -1;
+      closePlayer();
+      return;
+    }
+    if (index === currentIndex) {
+      currentIndex = Math.min(index, playlist.length - 1);
+      playIndex(currentIndex);
+    } else if (index < currentIndex) {
+      currentIndex--;
+    }
+    renderPlaylist();
+    savePlaylist();
+  }
+
+  function clearPlaylist() {
+    playlist.forEach((it) => {
+      URL.revokeObjectURL(it.url);
+      it.subtitles.forEach((s) => URL.revokeObjectURL(s.vttUrl));
+    });
+    playlist.length = 0;
+    currentIndex = -1;
+    idbClearAll();
+    closePlayer();
+  }
+
+  function playIndex(index, startPosition = 0) {
+    if (index < 0 || index >= playlist.length) return;
+    currentIndex = index;
+    const item = playlist[index];
+    video.src = item.url;
+    titleEl.textContent = item.name;
+    document.title = item.name + " — Media Player";
+    dropZone.style.display = "none";
+    player.classList.add("active");
+    hideError();
+    loadSubtitleTracks(item);
+    if (startPosition > 0) {
+      const seekOnce = () => {
+        try { video.currentTime = startPosition; } catch {}
+        video.removeEventListener("loadedmetadata", seekOnce);
+      };
+      video.addEventListener("loadedmetadata", seekOnce);
+    }
+    video.play().catch(() => {});
+    showControls();
+    renderPlaylist();
+    renderCcMenu();
+    updateNavButtons();
+    flashIndicator(`▶ ${index + 1}/${playlist.length}`);
+    saveSettings();
+  }
+
+  /* ---------- Subtitles ---------- */
+  function loadSubtitleTracks(item) {
+    /* Remove previous tracks. */
+    Array.from(video.querySelectorAll("track")).forEach((t) => t.remove());
+    item.subtitles.forEach((sub, i) => {
+      const t = document.createElement("track");
+      t.kind = "subtitles";
+      t.label = sub.label;
+      t.src = sub.vttUrl;
+      t.srclang = "en";
+      video.appendChild(t);
+    });
+    /* Apply previously-active selection if it still exists, else default to first track. */
+    if (item.subtitles.length === 0) {
+      activeSubIndex = -1;
+    } else if (activeSubIndex >= item.subtitles.length || activeSubIndex < 0) {
+      activeSubIndex = 0;
+    }
+    /* Defer so the textTracks list is populated. */
+    setTimeout(() => applySubtitleSelection(), 0);
+  }
+
+  function applySubtitleSelection() {
+    const tracks = video.textTracks;
+    for (let i = 0; i < tracks.length; i++) {
+      tracks[i].mode = (i === activeSubIndex) ? "showing" : "disabled";
+    }
+    updateCcButtonState();
+  }
+
+  function setSubtitle(index) {
+    activeSubIndex = index;
+    applySubtitleSelection();
+    renderCcMenu();
+    if (index === -1) flashIndicator("Subtitles off");
+    else {
+      const sub = playlist[currentIndex]?.subtitles[index];
+      if (sub) flashIndicator(`CC: ${sub.label.replace(/\.[^.]+$/, "")}`);
+    }
+  }
+
+  function updateCcButtonState() {
+    const has = currentIndex >= 0 && playlist[currentIndex]?.subtitles.length > 0;
+    ccBtn.style.opacity = has ? "1" : "0.55";
+    ccBtn.style.color = (has && activeSubIndex >= 0) ? "var(--accent)" : "";
+  }
+
+  function renderCcMenu() {
+    ccList.innerHTML = "";
+    const item = currentIndex >= 0 ? playlist[currentIndex] : null;
+    const subs = item ? item.subtitles : [];
+
+    const off = document.createElement("button");
+    off.className = "menu-item" + (activeSubIndex === -1 ? " selected" : "");
+    off.textContent = "Off";
+    off.addEventListener("click", () => { setSubtitle(-1); ccMenu.classList.remove("open"); });
+    ccList.appendChild(off);
+
+    if (subs.length === 0) {
+      const note = document.createElement("div");
+      note.style.cssText = "padding:6px 10px; color:var(--muted); font-size:12px;";
+      note.textContent = "No subtitles loaded for this video.";
+      ccList.appendChild(note);
+    } else {
+      subs.forEach((sub, i) => {
+        const row = document.createElement("button");
+        row.className = "menu-item" + (i === activeSubIndex ? " selected" : "");
+        row.textContent = sub.label;
+        row.title = sub.label;
+        row.addEventListener("click", () => { setSubtitle(i); ccMenu.classList.remove("open"); });
+        ccList.appendChild(row);
+      });
+    }
+    updateCcButtonState();
+  }
+  renderCcMenu();
+
+  ccBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    /* Toggle current subtitle on quick click? Use menu by default. */
+    ccMenu.classList.toggle("open");
+    speedMenu.classList.remove("open");
+  });
+
+  /* Subtitle size */
+  let currentSubSize = "medium";
+  function setSubSize(size, announce = true) {
+    currentSubSize = size;
+    video.classList.remove("subs-small", "subs-medium", "subs-large");
+    video.classList.add(`subs-${size}`);
+    ccMenu.querySelectorAll("[data-size]").forEach((el) => {
+      el.classList.toggle("selected", el.dataset.size === size);
+    });
+    if (announce) flashIndicator(`Subtitle size: ${size}`);
+  }
+  ccMenu.addEventListener("click", (e) => {
+    const item = e.target.closest("[data-size]");
+    if (!item) return;
+    setSubSize(item.dataset.size);
+    saveSettings();
+  });
+  ccAdd.addEventListener("click", () => subInput.click());
+  subInput.addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files || []);
+    subInput.value = "";
+    if (!files.length) return;
+    if (currentIndex < 0) {
+      showError("Load a video first.");
+      return;
+    }
+    const item = playlist[currentIndex];
+    for (const f of files) {
+      try {
+        const { vttBlob, vttUrl, annotations: subAnns } = await fileToVtt(f);
+        item.subtitles.push({ label: f.name, vttBlob, vttUrl });
+        if (subAnns && subAnns.length) mergeAnnotations(item, subAnns);
+      } catch {
+        showError(`Couldn't read subtitle file "${f.name}".`);
+      }
+    }
+    /* Auto-select the newly added subtitle if none was active. */
+    if (activeSubIndex === -1) activeSubIndex = item.subtitles.length - 1;
+    loadSubtitleTracks(item);
+    renderCcMenu();
+    flashIndicator("Subtitle loaded");
+    savePlaylist();
+  });
+
+  function playNext(auto = false) {
+    if (currentIndex + 1 < playlist.length) playIndex(currentIndex + 1);
+    else if (auto) flashIndicator("End of playlist");
+  }
+  function playPrev() {
+    if (currentIndex - 1 >= 0) playIndex(currentIndex - 1);
+  }
+  function updateNavButtons() {
+    prevBtn.disabled = currentIndex <= 0;
+    nextBtn.disabled = currentIndex < 0 || currentIndex >= playlist.length - 1;
+  }
+
+  function renderPlaylist() {
+    // Playlist drawer markup was removed — this is now a no-op.
+    // Internal `playlist[]` array is still used to track the currently-
+    // playing item for the catalogue streamer.
+    if (plCount) plCount.textContent = playlist.length;
+  }
+  renderPlaylist();
+
+  /* ---------- File pickers ---------- */
+  if (pickBtn) pickBtn.addEventListener("click", () => fileInput.click());
+  if (plAdd) plAdd.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", (e) => {
+    if (e.target.files && e.target.files.length) addFiles(e.target.files);
+    fileInput.value = "";
+  });
+
+  /* ---------- Drag & drop (whole window) ---------- */
+  window.addEventListener("dragenter", (e) => {
+    if (!e.dataTransfer || !e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    dragCounter++;
+    if (player.classList.contains("active")) player.classList.add("drag-over");
+    else dropZone.classList.add("drag-over");
+  });
+  window.addEventListener("dragover", (e) => {
+    if (e.dataTransfer && e.dataTransfer.types.includes("Files")) e.preventDefault();
+  });
+  window.addEventListener("dragleave", (e) => {
+    dragCounter = Math.max(0, dragCounter - 1);
+    if (dragCounter === 0) {
+      dropZone.classList.remove("drag-over");
+      player.classList.remove("drag-over");
+    }
+  });
+  window.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dragCounter = 0;
+    dropZone.classList.remove("drag-over");
+    player.classList.remove("drag-over");
+    const files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files.length) addFiles(files);
+  });
+
+  /* ---------- Play / pause ---------- */
+  function togglePlay() {
+    if (!video.src) return;
+    if (video.paused) video.play().catch(() => {});
+    else video.pause();
+  }
+  playBtn.addEventListener("click", togglePlay);
+  video.addEventListener("click", togglePlay);
+  video.addEventListener("dblclick", toggleFullscreen);
+  video.addEventListener("play",  () => playIcon.innerHTML = `<path d="${PAUSE_PATH}"/>`);
+  video.addEventListener("pause", () => playIcon.innerHTML = `<path d="${PLAY_PATH}"/>`);
+  video.addEventListener("ended", () => {
+    playIcon.innerHTML = `<path d="${PLAY_PATH}"/>`;
+    playNext(true);
+  });
+
+  /* ---------- Skip ---------- */
+  function skip(seconds) {
+    if (!isFinite(video.duration)) return;
+    video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
+    flashIndicator(seconds > 0 ? `+${seconds}s` : `${seconds}s`);
+  }
+  backBtn.addEventListener("click", () => skip(-10));
+  fwdBtn.addEventListener("click", () => skip(10));
+  prevBtn.addEventListener("click", playPrev);
+  nextBtn.addEventListener("click", () => playNext(false));
+
+  /* ---------- Time / progress ---------- */
+  video.addEventListener("loadedmetadata", () => { dur.textContent = fmt(video.duration); });
+  video.addEventListener("timeupdate", () => {
+    cur.textContent = fmt(video.currentTime);
+    if (isFinite(video.duration) && video.duration > 0) {
+      const pct = (video.currentTime / video.duration) * 100;
+      played.style.width = pct + "%";
+      thumb.style.left = pct + "%";
+    }
+  });
+  video.addEventListener("progress", () => {
+    if (video.buffered.length && isFinite(video.duration)) {
+      const end = video.buffered.end(video.buffered.length - 1);
+      buffered.style.width = (end / video.duration) * 100 + "%";
+    }
+  });
+
+  function pctFromEvent(e) {
+    const rect = progress.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    return Math.max(0, Math.min(1, x / rect.width));
+  }
+  function seekTo(p) {
+    if (!isFinite(video.duration)) return;
+    video.currentTime = p * video.duration;
+  }
+  progress.addEventListener("mousedown", (e) => {
+    isScrubbing = true;
+    seekTo(pctFromEvent(e));
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (isScrubbing) seekTo(pctFromEvent(e));
+  });
+  window.addEventListener("mouseup", () => { isScrubbing = false; });
+  progress.addEventListener("mousemove", (e) => {
+    const rect = progress.getBoundingClientRect();
+    const p = pctFromEvent(e);
+    seekTooltip.style.left = (p * rect.width) + "px";
+    if (isFinite(video.duration)) seekTooltip.textContent = fmt(p * video.duration);
+  });
+
+  /* ---------- Volume ---------- */
+  function updateVolumeIcon() {
+    if (video.muted || video.volume === 0) volIcon.innerHTML = `<path d="${VOL_MUTE}"/>`;
+    else if (video.volume < 0.5)            volIcon.innerHTML = `<path d="${VOL_LOW}"/>`;
+    else                                    volIcon.innerHTML = `<path d="${VOL_HIGH}"/>`;
+  }
+  volume.addEventListener("input", () => {
+    video.volume = parseFloat(volume.value);
+    video.muted = video.volume === 0;
+    if (video.volume > 0) lastVolume = video.volume;
+  });
+  muteBtn.addEventListener("click", () => {
+    if (video.muted || video.volume === 0) {
+      video.muted = false;
+      video.volume = lastVolume || 1;
+      volume.value = video.volume;
+      flashIndicator("Unmuted");
+    } else {
+      lastVolume = video.volume;
+      video.muted = true;
+      flashIndicator("Muted");
+    }
+  });
+  video.addEventListener("volumechange", () => {
+    volume.value = video.muted ? 0 : video.volume;
+    updateVolumeIcon();
+  });
+
+  /* ---------- Speed ---------- */
+  speedBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    speedMenu.classList.toggle("open");
+    ccMenu.classList.remove("open");
+  });
+  speedMenu.addEventListener("click", (e) => {
+    const item = e.target.closest(".menu-item");
+    if (!item) return;
+    setSpeed(parseFloat(item.dataset.speed));
+    speedMenu.classList.remove("open");
+  });
+  function setSpeed(speed) {
+    video.playbackRate = speed;
+    speedMenu.querySelectorAll(".menu-item").forEach((el) => {
+      el.classList.toggle("selected", parseFloat(el.dataset.speed) === speed);
+    });
+    flashIndicator(`${speed}×`);
+  }
+  document.addEventListener("click", (e) => {
+    if (!speedMenu.contains(e.target) && e.target !== speedBtn) {
+      speedMenu.classList.remove("open");
+    }
+    if (!ccMenu.contains(e.target) && e.target !== ccBtn && !ccBtn.contains(e.target)) {
+      ccMenu.classList.remove("open");
+    }
+  });
+
+  /* PiP removed per user direction. */
+
+  /* ---------- Fullscreen ---------- */
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) player.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+  fsBtn.addEventListener("click", toggleFullscreen);
+  document.addEventListener("fullscreenchange", () => {
+    const isFs = !!document.fullscreenElement;
+    fsIcon.innerHTML = `<path d="${isFs ? FS_EXIT : FS_ENTER}"/>`;
+  });
+
+  /* ---------- Playlist drawer (removed) ---------- */
+  function togglePlaylist() { /* removed — single-video streamer */ }
+  if (playlistBtn) playlistBtn.addEventListener("click", togglePlaylist);
+  if (plToggleBtn) plToggleBtn.addEventListener("click", togglePlaylist);
+  if (plClose) plClose.addEventListener("click", () => playlistEl && playlistEl.classList.remove("open"));
+  if (plClear) plClear.addEventListener("click", () => {
+    if (playlist.length === 0) return;
+    if (confirm("Clear the playlist?")) clearPlaylist();
+  });
+
+  /* ---------- Back / Close ---------- */
+  // The visible top-left button in the player is "Back" (replaces the old
+  // close button). For catalogue movies it walks the history back to the
+  // detail/home page; for drag-drop local files it falls back to closing.
+  const navBackBtn = document.getElementById("nav-back-btn");
+  if (navBackBtn) {
+    const goBack = async (e) => {
+      // Stop the click from bubbling into the keyboard/seek handlers below.
+      e.preventDefault();
+      e.stopPropagation();
+      if (currentCatalogueMovie) {
+        await flushCataloguePosition();
+        // If we have a detail entry in the back-stack, use it. Otherwise
+        // build one synthetically by going home (covers cases where playback
+        // started from somewhere other than the detail view).
+        if (history.length > 1) {
+          history.back();
+        } else {
+          if (player.classList.contains("active")) {
+            try {
+              video.pause();
+              video.removeAttribute("src");
+              video.load();
+            } catch (_) {}
+            player.classList.remove("active");
+            currentCatalogueMovie = null;
+          }
+          showHome();
+        }
+      } else if (confirm("Close player and clear the playlist?")) {
+        clearPlaylist();
+      }
+    };
+    navBackBtn.addEventListener("click", goBack);
+    // Also handle pointerdown defensively — some browsers/extensions can
+    // intercept click events on overlays inside the player.
+    navBackBtn.addEventListener("pointerdown", (e) => { e.stopPropagation(); });
+  }
+  // Legacy close button is hidden in the title-bar (kept in the DOM so any
+  // pre-existing keybindings still work). Same behaviour as Back for catalogue.
+  closeBtn.addEventListener("click", () => {
+    if (currentCatalogueMovie) {
+      flushCataloguePosition().then(() => history.back());
+      return;
+    }
+    if (confirm("Close player and clear the playlist?")) clearPlaylist();
+  });
+  function closePlayer() {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    player.classList.remove("active");
+    playlistEl && playlistEl.classList.remove("open");
+    dropZone.style.display = "flex";
+    document.title = "Media Player";
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    renderPlaylist();
+  }
+
+  /* ---------- Auto-hide controls ---------- */
+  function showControls() {
+    controls.classList.remove("hidden");
+    titleBar.classList.remove("hidden");
+    player.classList.remove("idle");
+    clearTimeout(controlsTimer);
+    controlsTimer = setTimeout(() => {
+      if (!video.paused) {
+        controls.classList.add("hidden");
+        titleBar.classList.add("hidden");
+        player.classList.add("idle");
+        speedMenu.classList.remove("open");
+        ccMenu.classList.remove("open");
+        playlistEl && playlistEl.classList.remove("open");
+      }
+    }, 3000);
+  }
+  player.addEventListener("mousemove", showControls);
+  player.addEventListener("mouseleave", () => {
+    if (!video.paused) {
+      controls.classList.add("hidden");
+      titleBar.classList.add("hidden");
+    }
+  });
+  video.addEventListener("pause", () => showControls());
+
+  /* ---------- Center indicator ---------- */
+  function flashIndicator(text) {
+    centerIndicator.querySelector(".text").textContent = text;
+    centerIndicator.classList.add("show");
+    clearTimeout(flashIndicator._t);
+    flashIndicator._t = setTimeout(() => centerIndicator.classList.remove("show"), 700);
+  }
+
+  /* ---------- Wikipedia lookup (Q) ---------- */
+  function mergeAnnotations(item, newOnes) {
+    const list = item.annotations = item.annotations || [];
+    const seen = new Set(list.map((a) => a.url + "@" + a.start.toFixed(3)));
+    for (const a of newOnes) {
+      const key = a.url + "@" + a.start.toFixed(3);
+      if (!seen.has(key)) { list.push(a); seen.add(key); }
+    }
+    list.sort((a, b) => a.start - b.start);
+  }
+  /** Closest annotation to the current playback time (interval distance). */
+  function findClosestAnnotation() {
+    if (currentIndex < 0) return null;
+    const anns = playlist[currentIndex].annotations || [];
+    if (!anns.length) return null;
+    const t = video.currentTime;
+    let best = null, bestDist = Infinity;
+    for (const a of anns) {
+      const dist = (t < a.start) ? (a.start - t)
+                  : (t > a.end)   ? (t - a.end)
+                  : 0;
+      if (dist < bestDist) { bestDist = dist; best = a; }
+    }
+    return best;
+  }
+  /* ---------- Q (toggle all annotations) + W (open closest) ----------
+     Q  — toggle visibility of every annotation tick on the progress bar
+          (one ▼ per cue with a `{https://...}` URL). The closest one to
+          the current playhead also shows its label as a tooltip.
+     W  — open the closest annotation's Wikipedia article in a new tab.
+     Click on a tick or its label — open that specific annotation. */
+  const annMarker = document.getElementById("annotation-marker");
+  const annLabel  = document.getElementById("annotation-label");
+  const progressEl = document.getElementById("progress");
+  let _annotationsVisible = false;
+  let _activeAnn = null;
+
+  function clearAnnotationTicks() {
+    if (!progressEl) return;
+    progressEl.querySelectorAll(".annotation-tick").forEach((t) => t.remove());
+  }
+
+  function renderAnnotationTicks() {
+    clearAnnotationTicks();
+    if (!progressEl) return;
+    if (currentIndex < 0) return;
+    const anns = playlist[currentIndex].annotations || [];
+    const dur = video.duration || 0;
+    if (!anns.length || !dur) return;
+    // Sort by start time so we can stagger labels of close-together items
+    // by alternating row offsets.
+    const sorted = anns.slice().sort((a, b) => a.start - b.start);
+    let lastPct = -100;
+    let row = 0;
+    sorted.forEach((a) => {
+      const pct = Math.max(0, Math.min(100, (a.start / dur) * 100));
+      // If this label would overlap the previous (within ~6%), bump the row.
+      if (pct - lastPct < 6) row = (row + 1) % 4;
+      else row = 0;
+      lastPct = pct;
+      const tick = document.createElement("div");
+      tick.className = "annotation-tick";
+      tick.style.left = pct + "%";
+      tick.dataset.url = a.url;
+      tick.dataset.row = String(row);
+      tick.innerHTML =
+        `<span class="annotation-tick-arrow">▼</span>` +
+        `<span class="annotation-tick-label" style="--row:${row}">${escapeHtml(a.title || a.url)}</span>`;
+      tick.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.open(a.url, "_blank", "noopener,noreferrer");
+      });
+      progressEl.appendChild(tick);
+    });
+  }
+
+  function placeClosestLabel() {
+    if (!annMarker || !annLabel) return;
+    const dur = video.duration || 0;
+    if (!dur) return;
+    const closest = findClosestAnnotation();
+    if (!closest) {
+      annMarker.classList.remove("visible");
+      _activeAnn = null;
+      return;
+    }
+    const pct = Math.max(0, Math.min(100, (closest.start / dur) * 100));
+    annMarker.style.left = pct + "%";
+    annLabel.innerHTML =
+      `${escapeHtml(closest.title || closest.url)}<span class="annotation-hint">— W to open</span>`;
+    annMarker.classList.add("visible");
+    _activeAnn = closest;
+  }
+
+  function hideAnnotationsOnSlider() {
+    _annotationsVisible = false;
+    clearAnnotationTicks();
+    if (annMarker) annMarker.classList.remove("visible");
+    _activeAnn = null;
+  }
+
+  function showAnnotationsOnSlider() {
+    if (currentIndex < 0) {
+      showError("No video loaded.");
+      return;
+    }
+    const item = playlist[currentIndex];
+    const anns = (item && item.annotations) || [];
+    if (!anns.length) {
+      showError("No Wikipedia links in this video's subtitles.");
+      return;
+    }
+    // Mark visible immediately so toggle state stays consistent.
+    _annotationsVisible = true;
+    showControls();
+    if (annMarker) annMarker.classList.remove("visible");
+
+    if (!video.duration || !isFinite(video.duration)) {
+      // Defer rendering until metadata is loaded — but keep the visible
+      // flag set so a stray Q press won't interleave state.
+      const onMeta = () => {
+        video.removeEventListener("loadedmetadata", onMeta);
+        if (_annotationsVisible) renderAnnotationTicks();
+      };
+      video.addEventListener("loadedmetadata", onMeta);
+      return;
+    }
+    renderAnnotationTicks();
+  }
+
+  function toggleAnnotationsOnSlider() {
+    if (currentIndex < 0) return;
+    if (_annotationsVisible) {
+      hideAnnotationsOnSlider();
+    } else {
+      showAnnotationsOnSlider();
+    }
+  }
+
+  function openClosestAnnotation() {
+    if (currentIndex < 0) {
+      showError("No video loaded.");
+      return;
+    }
+    const anns = playlist[currentIndex].annotations || [];
+    if (!anns.length) {
+      showError("No Wikipedia links in this video's subtitles.");
+      return;
+    }
+    const hit = findClosestAnnotation();
+    if (!hit) return;
+    flashIndicator(`📖 ${hit.title}`);
+    window.open(hit.url, "_blank", "noopener,noreferrer");
+  }
+
+  if (annLabel) {
+    annLabel.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (_activeAnn) {
+        flashIndicator(`📖 ${_activeAnn.title}`);
+        window.open(_activeAnn.url, "_blank", "noopener,noreferrer");
+      }
+    });
+  }
+
+  // Re-render the full set of ticks once duration is known, in case Q was
+  // pressed before the video had metadata.
+  video.addEventListener("loadedmetadata", () => {
+    if (_annotationsVisible) renderAnnotationTicks();
+  });
+
+  /* ---------- Keyboard shortcuts ---------- */
+  /* Hard-refresh interceptor: Cmd/Ctrl + Shift + R clears saved state. */
+  document.addEventListener("keydown", async (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "R" || e.key === "r")) {
+      e.preventDefault();
+      try { await idbClearAll(); } catch {}
+      location.reload();
+    }
+  }, true);
+
+  document.addEventListener("keydown", (e) => {
+    if (!player.classList.contains("active")) return;
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    const k = e.key;
+    const cmd = e.metaKey || e.ctrlKey;
+
+    /* Cmd / Ctrl + arrows = prev / next track */
+    if (cmd && (k === "ArrowLeft" || k === "ArrowRight")) {
+      e.preventDefault();
+      if (k === "ArrowLeft") playPrev();
+      else playNext(false);
+      return;
+    }
+
+    switch (k) {
+      case " ":
+      case "k":
+      case "K":
+        e.preventDefault(); togglePlay(); break;
+      case "ArrowLeft":
+      case "j":
+      case "J":
+        e.preventDefault(); skip(-10); break;
+      case "ArrowRight":
+        e.preventDefault(); skip(10); break;
+      /* L (playlist toggle) removed — single-video streamer */
+      case "ArrowUp":
+        e.preventDefault();
+        video.muted = false;
+        video.volume = Math.min(1, video.volume + 0.05);
+        volume.value = video.volume;
+        flashIndicator(`${Math.round(video.volume * 100)}%`);
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        video.volume = Math.max(0, video.volume - 0.05);
+        volume.value = video.volume;
+        flashIndicator(`${Math.round(video.volume * 100)}%`);
+        break;
+      case "m":
+      case "M":
+        muteBtn.click(); break;
+      case "f":
+      case "F":
+        toggleFullscreen(); break;
+      /* P (picture-in-picture) removed */
+      case "c":
+      case "C": {
+        /* Cycle: off -> sub 0 -> sub 1 -> ... -> off */
+        const subs = currentIndex >= 0 ? playlist[currentIndex].subtitles : [];
+        if (subs.length === 0) {
+          showError("No subtitles loaded. Drop a .srt or .vtt file to add one.");
+        } else {
+          const next = activeSubIndex + 1;
+          setSubtitle(next >= subs.length ? -1 : next);
+        }
+        break;
+      }
+      case "q":
+      case "Q":
+        e.preventDefault();
+        toggleAnnotationsOnSlider();
+        break;
+      case "w":
+      case "W":
+        e.preventDefault();
+        openClosestAnnotation();
+        break;
+      case "n":
+      case "N":
+        playNext(false); break;
+      case "Escape":
+        if (playlistEl && playlistEl.classList.contains("open")) playlistEl.classList.remove("open");
+        else if (!document.fullscreenElement) {
+          if (confirm("Close player and clear the playlist?")) clearPlaylist();
+        }
+        break;
+      case ",":
+        e.preventDefault();
+        setSpeed(Math.max(0.25, +(video.playbackRate - 0.25).toFixed(2)));
+        break;
+      case ".":
+        e.preventDefault();
+        setSpeed(Math.min(3, +(video.playbackRate + 0.25).toFixed(2)));
+        break;
+      case "0": case "1": case "2": case "3": case "4":
+      case "5": case "6": case "7": case "8": case "9":
+        if (isFinite(video.duration)) {
+          e.preventDefault();
+          video.currentTime = (parseInt(k, 10) / 10) * video.duration;
+        }
+        break;
+    }
+    showControls();
+  });
+
+  /* ---------- Persistence (IndexedDB) ---------- */
+  const DB_NAME = "media-player-db";
+  const DB_VERSION = 1;
+  let _dbPromise = null;
+  function openDb() {
+    if (_dbPromise) return _dbPromise;
+    _dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains("playlist")) db.createObjectStore("playlist");
+        if (!db.objectStoreNames.contains("settings")) db.createObjectStore("settings");
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror   = () => reject(req.error);
+    });
+    return _dbPromise;
+  }
+  async function idbPut(store, key, value) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(store, "readwrite");
+      tx.objectStore(store).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror    = () => reject(tx.error);
+    });
+  }
+  async function idbGet(store, key) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(store, "readonly");
+      const req = tx.objectStore(store).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror   = () => reject(req.error);
+    });
+  }
+  async function idbClearAll() {
+    try {
+      const db = await openDb();
+      return new Promise((resolve) => {
+        const tx = db.transaction(["playlist", "settings"], "readwrite");
+        tx.objectStore("playlist").clear();
+        tx.objectStore("settings").clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror    = () => resolve();
+      });
+    } catch { /* ignore */ }
+  }
+
+  let _savePlaylistInflight = null;
+  async function savePlaylist() {
+    /* Debounce parallel calls — last one wins. */
+    const data = playlist.map((it) => ({
+      name: it.name,
+      blob: it.file,
+      subtitles: it.subtitles.map((s) => ({ label: s.label, vttBlob: s.vttBlob })),
+      annotations: it.annotations || []
+    }));
+    _savePlaylistInflight = (async () => {
+      try { await idbPut("playlist", "current", data); }
+      catch (e) {
+        console.warn("Couldn't persist playlist:", e);
+        showError("Couldn't save the file for resume — quota or permissions issue.");
+      }
+    })();
+    return _savePlaylistInflight;
+  }
+
+  let _saveSettingsTimer = null;
+  function saveSettings() {
+    /* throttle bursts */
+    clearTimeout(_saveSettingsTimer);
+    _saveSettingsTimer = setTimeout(() => {
+      const settings = {
+        currentIndex,
+        position: video.currentTime || 0,
+        volume:   video.volume,
+        muted:    video.muted,
+        speed:    video.playbackRate,
+        activeSubIndex,
+        subSize:  currentSubSize
+      };
+      idbPut("settings", "current", settings).catch(() => {});
+    }, 250);
+  }
+
+  async function restoreState() {
+    let items, settings;
+    try {
+      items    = await idbGet("playlist", "current");
+      settings = await idbGet("settings", "current");
+    } catch (e) {
+      console.warn("Couldn't read saved state:", e);
+      return;
+    }
+    if (!items || !items.length) return;
+
+    items.forEach((item) => {
+      const file = (item.blob instanceof File)
+        ? item.blob
+        : new File([item.blob], item.name, { type: item.blob.type || "video/mp4" });
+      const subtitles = (item.subtitles || []).map((s) => ({
+        label:   s.label,
+        vttBlob: s.vttBlob,
+        vttUrl:  URL.createObjectURL(s.vttBlob)
+      }));
+      playlist.push({
+        file,
+        url:  URL.createObjectURL(file),
+        name: item.name,
+        subtitles,
+        annotations: item.annotations || []
+      });
+    });
+
+    if (settings) {
+      if (typeof settings.activeSubIndex === "number") activeSubIndex = settings.activeSubIndex;
+      if (settings.subSize) setSubSize(settings.subSize, false);
+      if (typeof settings.volume === "number") {
+        video.volume = settings.volume;
+        volume.value = settings.volume;
+        lastVolume   = settings.volume || 1;
+      }
+      if (settings.muted) video.muted = true;
+      if (settings.speed) setSpeed(settings.speed);
+    }
+
+    renderPlaylist();
+    const idx = settings && typeof settings.currentIndex === "number" ? settings.currentIndex : 0;
+    const pos = settings && typeof settings.position === "number" ? settings.position : 0;
+    if (idx >= 0 && idx < playlist.length) {
+      playIndex(idx, pos);
+    }
+  }
+
+  /* Save settings on common events. */
+  video.addEventListener("timeupdate",   saveSettings);
+  video.addEventListener("ratechange",   saveSettings);
+  video.addEventListener("volumechange", saveSettings);
+  video.addEventListener("seeked",       saveSettings);
+
+  /* ---------- Streamer / catalogue browser ---------- */
+  // The catalogue + every SRT are loaded via classic <script src> from
+  // jsDelivr (CDN-fronted GitHub). Classic scripts bypass CORS, so this
+  // works even when index.html is opened directly via file://.
+  //
+  //   <script src=".../public_domain_movies.js"> → window.CATALOGUE
+  //   <script src=".../srt_data.js">              → window.SRT_DATA
+  //
+  // To point at a different repo, edit the <script> tags in <body> below.
+  const CATALOGUE_BASE = "https://raw.githubusercontent.com/osama-website/publicdomainfilms/refs/heads/main/";
+  const CATALOGUE_URL  = CATALOGUE_BASE + "public_domain_movies.json"; // legacy fetch fallback
+
+  /** Translate a JSON-stored SRT path into an absolute URL. */
+  function srtUrl(p) {
+    if (!p) return null;
+    if (/^https?:\/\//.test(p)) return p;
+    return CATALOGUE_BASE + String(p).replace(/^\.?\/?srts\//, "");
+  }
+  const homeEl       = document.getElementById("home");
+  const searchEl     = document.getElementById("search");
+  const sortEl       = document.getElementById("sort");
+  // Rating slider + upload-own button removed per user direction; their
+  // referenced elements are now optional. Defaulting safely below.
+  const minRatingEl  = null;
+  const minRatingLabel = null;
+  const uploadOwnEl  = null;
+  const genreChipsEl = document.getElementById("genre-chips");
+  const statusEl     = document.getElementById("status");
+  const heroSlotEl   = document.getElementById("hero-slot");
+  const rowsEl       = document.getElementById("rows");
+
+  let catalogue = [];
+  let activeGenre = "all";
+  let subtitleCache = new Map();   // imdb_id → lower-cased SRT text
+
+  function showHome()   {
+    homeEl.classList.add("active");
+    dropZone.style.display = "none";
+    player.classList.remove("active");
+    hideRecsRail();
+    if (location.hash !== "#home") history.replaceState({ view: "home" }, "", "#home");
+  }
+  function showDropZone(){
+    homeEl.classList.remove("active");
+    dropZone.style.display = "flex";
+    player.classList.remove("active");
+  }
+  function showPlayer() {
+    homeEl.classList.remove("active");
+    dropZone.style.display = "none";
+    player.classList.add("active");
+    // Push a history entry so browser-back returns to the home catalogue
+    // instead of leaving the page entirely.
+    if (history.state?.view !== "player") {
+      history.pushState({ view: "player" }, "", "#play");
+    }
+  }
+
+  // Browser-back navigation across home → detail → player.
+  window.addEventListener("popstate", (e) => {
+    const view = e.state?.view;
+    if (view === "home" || !view) {
+      // Coming back to the home catalogue — flush any pending position save first.
+      if (player.classList.contains("active")) {
+        flushCataloguePosition();
+        try {
+          video.pause();
+          video.removeAttribute("src");
+          video.load();
+        } catch (_) {}
+        currentCatalogueMovie = null;
+      }
+      hideDetail();
+      if (catalogue.length) {
+        homeEl.classList.add("active");
+        player.classList.remove("active");
+      } else {
+        showDropZone();
+      }
+      document.title = "Public Domain Cinema";
+    } else if (view === "detail") {
+      // Coming back to a detail view (e.g. browser-back from the player)
+      if (player.classList.contains("active")) {
+        flushCataloguePosition();
+        try {
+          video.pause();
+          video.removeAttribute("src");
+          video.load();
+        } catch (_) {}
+        player.classList.remove("active");
+        currentCatalogueMovie = null;
+      }
+      const id = e.state.imdb;
+      const m = catalogue.find((x) => x.imdb_id === id);
+      if (m) {
+        // Re-render detail without pushing another state
+        currentDetailMovie = m;
+        detailEl.classList.add("active");
+        detailEl.setAttribute("aria-hidden", "false");
+        // Re-fill (lighter than showDetail's full render — but use it for simplicity)
+        detailTitle.textContent = m.title || "";
+        detailMeta.innerHTML = [
+          m.release_date ? `<span class="pill">${escapeHtml(m.release_date)}</span>` : "",
+          m.runtime_minutes ? `<span class="pill">${m.runtime_minutes} min</span>` : "",
+          m.rating != null ? `<span class="pill rating">★ ${m.rating.toFixed(1)}</span>` : "",
+          ...((m.genre || []).slice(0, 4).map((g) => `<span class="pill">${escapeHtml(g)}</span>`))
+        ].filter(Boolean).join("");
+        detailPlot.textContent = m.plot || "No description available.";
+        const cast = (m.cast || []).slice(0, 8);
+        detailCast.innerHTML = cast.length ? `<strong>Cast:</strong> ${cast.map(escapeHtml).join(", ")}` : "";
+        detailBg.style.backgroundImage = m.poster_url ? `url("${m.poster_url}")` : "";
+      } else {
+        hideDetail();
+      }
+    } else if (view === "player") {
+      // Forward into the player — no-op (the player was already showing the previous movie)
+    } else if (view === "about") {
+      showAbout();
+    }
+    // Any popstate that's not the about view should hide the about page
+    if (view !== "about") hideAbout();
+  });
+
+  /* Override the existing closePlayer so it goes back to whichever
+     entry view was used. */
+  const _origClosePlayer = closePlayer;
+  closePlayer = function() {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    if (catalogue.length) {
+      showHome();
+    } else {
+      showDropZone();
+    }
+    document.title = "Public Domain Cinema";
+  };
+
+  if (uploadOwnEl) uploadOwnEl.addEventListener("click", showDropZone);
+
+  async function loadCatalogue() {
+    // Primary path: <script src> CDN load assigned to window.CATALOGUE.
+    // Works on file:// (classic scripts bypass CORS).
+    if (Array.isArray(window.CATALOGUE) && window.CATALOGUE.length) {
+      catalogue = window.CATALOGUE;
+    }
+    // Fallback: legacy inline JSON island (previous deployments).
+    if (!catalogue.length) {
+      const inlineEl = document.getElementById("catalogue-data");
+      if (inlineEl && inlineEl.textContent.trim()) {
+        try { catalogue = JSON.parse(inlineEl.textContent); }
+        catch (err) { console.warn("Inline catalogue parse failed:", err); }
+      }
+    }
+    // Last resort: fetch (only works on http/https origins).
+    if (!catalogue.length) {
+      try {
+        const r = await fetch(CATALOGUE_URL, { cache: "default" });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        catalogue = await r.json();
+      } catch (err) {
+        catalogue = [];
+        console.warn("Catalogue load failed:", err);
+      }
+    }
+    if (!catalogue.length) {
+      // No catalogue → fall back to drop-zone
+      showDropZone();
+      return;
+    }
+    showHome();
+    renderGenreChips();
+    renderHome();
+
+    // Build TF-IDF index in the background (Phase 4). Re-renders home once ready.
+    loadOrBuildTfIdf(catalogue).then(() => {
+      if (tfidfIndex) renderHome();
+    }).catch(() => {});
+  }
+
+  function renderGenreChips() {
+    const counts = new Map();
+    catalogue.forEach((m) => (m.genre || []).forEach((g) => {
+      counts.set(g, (counts.get(g) || 0) + 1);
+    }));
+    const top = [["all", catalogue.length],
+                 ...Array.from(counts.entries())
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 14)];
+    genreChipsEl.innerHTML = top.map(([g, n]) => `
+      <button class="filter-chip ${g === activeGenre ? "active" : ""}"
+              data-genre="${g}">${g} <span style="opacity:0.6">(${n})</span></button>
+    `).join("");
+    genreChipsEl.querySelectorAll(".filter-chip").forEach((c) => {
+      c.addEventListener("click", () => {
+        activeGenre = c.dataset.genre;
+        renderGenreChips();
+        renderHome();
+      });
+    });
+  }
+
+  function filterCatalogue() {
+    const q = (searchEl.value || "").trim().toLowerCase();
+    const minR = minRatingEl ? (parseFloat(minRatingEl.value) || 0) : 0;
+    let out = catalogue.slice();
+    if (activeGenre !== "all") {
+      out = out.filter((m) => (m.genre || []).includes(activeGenre));
+    }
+    if (minR > 0) {
+      out = out.filter((m) => (m.rating != null) && m.rating >= minR);
+    }
+    if (q) {
+      // TF-IDF dialogue scoring (Phase 4): when index is loaded and query is
+      // long enough, use cosine-similarity scoring; fall back to the legacy
+      // substring path when not available so behavior stays correct on first
+      // load.
+      const tfHits = {};
+      if (tfidfIndex && q.length >= 3) {
+        const ranked = tfidfSearch(q);
+        if (ranked) for (const r of ranked) tfHits[r.imdb_id] = r.score;
+      }
+      out = out
+        .map((m) => {
+          let score = 0;
+          if ((m.title || "").toLowerCase().includes(q))  score += 10;
+          if ((m.plot  || "").toLowerCase().includes(q))  score += 4;
+          if ((m.genre || []).join(" ").toLowerCase().includes(q)) score += 3;
+          if ((m.cast  || []).join(" ").toLowerCase().includes(q)) score += 2;
+          const tfScore = tfHits[m.imdb_id] || 0;
+          if (tfScore > 0) {
+            score += 8 * tfScore;
+          } else {
+            const sub = subtitleCache.get(m.imdb_id);
+            if (sub && sub.includes(q)) score += 5;
+          }
+          return { m, score };
+        })
+        .filter(({ score }) => score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(({ m }) => m);
+    } else {
+      const s = sortEl.value;
+      if (s === "rating") out.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+      else if (s === "year-desc") out.sort((a, b) => (parseInt(b.release_date)||0) - (parseInt(a.release_date)||0));
+      else if (s === "year-asc")  out.sort((a, b) => (parseInt(a.release_date)||0) - (parseInt(b.release_date)||0));
+      else if (s === "title")     out.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    }
+    return out;
+  }
+
+  function renderHome() {
+    const filtered = filterCatalogue();
+    const q = (searchEl.value || "").trim();
+
+    statusEl.textContent = filtered.length
+      ? `${filtered.length} of ${catalogue.length} movies`
+      : (q ? `No matches for "${q}"` : "No movies match those filters");
+
+    /* Hero — deterministic per-15-min slot pick (everyone watching at the
+       same wall-clock 15-minute slot sees the same featured film). Falls
+       back to top-rated when there's a search query. */
+    if (filtered.length && !q && activeGenre === "all") {
+      const slot = Math.floor(Date.now() / (15 * 60 * 1000));
+      // Hash the slot via Knuth's multiplicative method so consecutive slots
+      // produce visibly different indices; modulo by filtered.length.
+      const idx = ((slot * 2654435761) >>> 0) % filtered.length;
+      const hero = filtered[idx];
+      const heroImg = hero.backdrop_url || hero.poster_url;
+      const heroBg = heroImg
+        ? `style="background-image:linear-gradient(90deg, rgba(15,15,22,0.96) 0%, rgba(15,15,22,0.6) 50%, rgba(15,15,22,0.3) 100%), url('${escapeHtml(heroImg)}'); background-size:cover; background-position:center;"`
+        : "";
+      heroSlotEl.innerHTML = `
+        <div class="hero" ${heroBg}>
+          <div class="hero-info">
+            <h2>${escapeHtml(hero.title)}</h2>
+            <div class="hero-meta">
+              <span class="pill">${hero.release_date || "—"}</span>
+              ${hero.runtime_minutes ? `<span class="pill">${hero.runtime_minutes} min</span>` : ""}
+              ${hero.rating != null ? `<span class="pill">★ ${hero.rating.toFixed(1)}</span>` : ""}
+              ${(hero.genre || []).slice(0,3).map(g => `<span class="pill">${escapeHtml(g)}</span>`).join("")}
+            </div>
+            <p>${escapeHtml((hero.plot || "").slice(0, 360))}${(hero.plot || "").length > 360 ? "…" : ""}</p>
+            <button data-imdb="${hero.imdb_id}">Watch now</button>
+          </div>
+        </div>
+      `;
+      heroSlotEl.querySelector("button").addEventListener("click",
+        () => showDetail(hero));
+    } else {
+      heroSlotEl.innerHTML = "";
+    }
+    // Lazy-fetch posters for cards that don't have a baked-in URL yet.
+    queueMicrotask(() => backfillPosters());
+    // Wire arrow scroll buttons on each row (after innerHTML settles below).
+    queueMicrotask(() => wireRowArrows(rowsEl));
+
+    /* Rows: stacked by genre, decade, and original language (Netflix/HBO
+       Max-style). Each row gets its own horizontal scroller with arrow
+       buttons. When searching or filtering by chip, a single flat row. */
+    if (q || activeGenre !== "all") {
+      rowsEl.innerHTML = renderRowHtml("", filtered);
+    } else {
+      const sections = [];
+      // Each category needs at least MIN_PER_ROW movies to deserve its own
+      // row. If nothing meets the bar, fall back to a single pseudo-row
+      // labelled "All movies" so the home view never sits empty.
+      const MIN_PER_ROW = 3;
+
+      // -- Genre rows --
+      const byGenre = new Map();
+      filtered.forEach((m) => (m.genre || []).slice(0, 4).forEach((g) => {
+        if (!byGenre.has(g)) byGenre.set(g, []);
+        byGenre.get(g).push(m);
+      }));
+      Array.from(byGenre.entries())
+        .filter(([_, arr]) => arr.length >= MIN_PER_ROW)
+        .sort((a, b) => b[1].length - a[1].length)
+        .slice(0, 6)   // Netflix-style cap on genre rows
+        .forEach(([g, arr]) => sections.push({ label: g, movies: arr.slice(0, 30) }));
+
+      // -- Decade rows --
+      const byDecade = new Map();
+      filtered.forEach((m) => {
+        const y = parseInt(m.release_date);
+        if (!y) return;
+        const d = `${Math.floor(y / 10) * 10}s`;
+        if (!byDecade.has(d)) byDecade.set(d, []);
+        byDecade.get(d).push(m);
+      });
+      Array.from(byDecade.entries())
+        .filter(([_, arr]) => arr.length >= MIN_PER_ROW)
+        .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))   // newest first
+        .slice(0, 4)
+        .forEach(([d, arr]) => sections.push({ label: d, movies: arr.slice(0, 30) }));
+
+      // -- Language rows --
+      const byLang = new Map();
+      filtered.forEach((m) => {
+        const l = (m.native_language || "").trim();
+        if (!l) return;
+        if (!byLang.has(l)) byLang.set(l, []);
+        byLang.get(l).push(m);
+      });
+      Array.from(byLang.entries())
+        .filter(([_, arr]) => arr.length >= MIN_PER_ROW)
+        .sort((a, b) => b[1].length - a[1].length)
+        .slice(0, 3)
+        .forEach(([l, arr]) => sections.push({ label: `${l} cinema`, movies: arr.slice(0, 30) }));
+
+      // Final cap: never show more than ~12 rows total (Netflix-like density).
+      sections.length = Math.min(sections.length, 12);
+
+      // Pseudo-row fallback: nothing meets the per-category min, but the
+      // catalogue itself has >= MIN_PER_ROW movies — show them all under
+      // a generic label.
+      if (sections.length === 0 && filtered.length >= MIN_PER_ROW) {
+        sections.push({ label: "All movies", movies: filtered.slice(0, 30) });
+      }
+
+      rowsEl.innerHTML = sections.length
+        ? sections.map((s) => renderRowHtml(s.label, s.movies)).join("")
+        : renderRowHtml("", filtered);
+    }
+
+    // Continue watching row: prepend at the top of #rows when there's progress
+    loadWatchPositions().then((rows) => {
+      if (!rows || rows.length === 0) return;
+      const valid = rows
+        .filter((r) => r && r.position && r.duration && r.position / r.duration < 0.95)
+        .sort((a, b) => (b.last_watched || 0) - (a.last_watched || 0))
+        .slice(0, 12);
+      if (!valid.length) return;
+      const html = valid.map((m) => {
+        const pct = Math.max(2, Math.min(98, Math.round((m.position / m.duration) * 100)));
+        const inner = cardHtml(m);
+        // Inject a progress bar inside the poster div
+        return inner.replace(
+          '<span class="play-overlay"></span>',
+          `<span class="play-overlay"></span><div class="progress-strip"><div class="progress-strip-fill" style="width:${pct}%"></div></div>`
+        );
+      }).join("");
+      const cwHtml = `
+        <div class="row" id="continue-watching">
+          <h2 class="row-heading">Continue watching</h2>
+          <div class="row-scroller">
+            <button class="row-arrow row-arrow-left" aria-label="Scroll left">‹</button>
+            <div class="row-cards">${html}</div>
+            <button class="row-arrow row-arrow-right" aria-label="Scroll right">›</button>
+          </div>
+        </div>`;
+      if (!document.getElementById("continue-watching")) {
+        rowsEl.insertAdjacentHTML("afterbegin", cwHtml);
+        const cw = document.getElementById("continue-watching");
+        cw.querySelectorAll(".card").forEach((card) => {
+          card.addEventListener("click", () => {
+            const id = card.dataset.imdb;
+            // Always prefer the full catalogue entry (has plot, cast,
+            // wikipedia_url, etc.); the watch record is only a fallback
+            // for the rare case where the catalogue dropped the entry.
+            const m = catalogue.find((x) => x.imdb_id === id) || valid.find((x) => x.imdb_id === id);
+            if (m) showDetail(m);
+          });
+        });
+        wireRowArrows(cw);
+      }
+    }).catch(() => {});
+
+    rowsEl.querySelectorAll(".card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const id = card.dataset.imdb;
+        const m  = catalogue.find((x) => x.imdb_id === id);
+        if (m) showDetail(m);
+      });
+    });
+  }
+
+  function renderRowHtml(label, movies) {
+    const heading = label ? `<h2 class="row-heading">${escapeHtml(label)}</h2>` : "";
+    const cards = movies.map(cardHtml).join("");
+    return `
+      <div class="row">
+        ${heading}
+        <div class="row-scroller">
+          <button class="row-arrow row-arrow-left" aria-label="Scroll left">‹</button>
+          <div class="row-cards">${cards}</div>
+          <button class="row-arrow row-arrow-right" aria-label="Scroll right">›</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function wireRowArrows(scope) {
+    (scope || document).querySelectorAll(".row-scroller").forEach((sc) => {
+      const cards = sc.querySelector(".row-cards");
+      const left  = sc.querySelector(".row-arrow-left");
+      const right = sc.querySelector(".row-arrow-right");
+      if (!cards || !left || !right) return;
+      const update = () => {
+        const max = cards.scrollWidth - cards.clientWidth - 1;
+        left.classList.toggle("disabled", cards.scrollLeft <= 1);
+        right.classList.toggle("disabled", cards.scrollLeft >= max);
+      };
+      left.addEventListener("click", () => {
+        cards.scrollBy({ left: -cards.clientWidth * 0.85, behavior: "smooth" });
+      });
+      right.addEventListener("click", () => {
+        cards.scrollBy({ left:  cards.clientWidth * 0.85, behavior: "smooth" });
+      });
+      cards.addEventListener("scroll", update, { passive: true });
+      // Defer to next frame so scrollWidth is settled.
+      requestAnimationFrame(update);
+    });
+  }
+
+  function cardHtml(m) {
+    const r = m.rating != null ? m.rating.toFixed(1) : "—";
+    const runtime = m.runtime_minutes ? `${m.runtime_minutes}m` : "";
+    const posterImg = m.poster_url
+      ? `<img class="poster-img" loading="lazy" src="${escapeHtml(m.poster_url)}" alt="" onload="this.classList.add('loaded')" onerror="this.remove()">`
+      : "";
+    return `
+      <div class="card" data-imdb="${m.imdb_id}">
+        <div class="poster">
+          ${posterImg}
+          <span class="rating-badge">★ ${r}</span>
+          ${runtime ? `<span class="runtime-badge">${runtime}</span>` : ""}
+          <span class="play-overlay"></span>
+        </div>
+        <div class="meta">
+          <div class="title">${escapeHtml(m.title)}</div>
+          <div class="sub">
+            <span>${m.release_date || ""}</span>
+            ${(m.genre || []).slice(0, 2).map((g, i) => `<span class="${i?'dot':''}">${escapeHtml(g)}</span>`).join("")}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+      "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+    }[c]));
+  }
+
+  /* Live filtering */
+  searchEl.addEventListener("input", () => renderHome());
+  sortEl.addEventListener("change", () => renderHome());
+  // (rating slider removed)
+
+  /* ---------- Continue watching (Phase 5 / POLISH-02) ---------- */
+  // Per-movie playback position keyed by imdb_id. Stored as separate
+  // settings rows ("watch:tt000") so listing them is a prefix scan.
+  // Each row carries an `expires_at` (last_watched + runtime*2 minutes);
+  // expired rows are pruned on app load and on each loadWatchPositions().
+  // Single source of truth for "what's playing right now from the
+  // catalogue". Used by the Back button, position-save, and the
+  // history-back popstate handlers.
+  let currentCatalogueMovie = null;
+  let _watchSaveTimer = null;
+  const WATCH_TTL_FALLBACK_MIN = 240;  // 4h when runtime is unknown
+
+  function _watchRecord(m, pos, dur) {
+    const runtime = m.runtime_minutes || Math.max(WATCH_TTL_FALLBACK_MIN, Math.ceil(dur / 60));
+    return {
+      imdb_id:    m.imdb_id,
+      title:      m.title,
+      release_date: m.release_date,
+      rating:     m.rating,
+      runtime_minutes: m.runtime_minutes,
+      genre:      m.genre,
+      poster_url: m.poster_url,
+      mp4_url:    m.mp4_url,
+      subtitle_local_english: m.subtitle_local_english,
+      position:   pos,
+      duration:   dur,
+      last_watched: Date.now(),
+      // TTL: keep the row for runtime*2 minutes after last write, then prune.
+      expires_at: Date.now() + runtime * 2 * 60 * 1000,
+    };
+  }
+
+  async function _writeWatchNow() {
+    if (!currentCatalogueMovie) return;
+    const m = currentCatalogueMovie;
+    const pos = video.currentTime || 0;
+    const dur = video.duration || 0;
+    if (dur > 0 && pos / dur >= 0.95) {
+      // Finished — drop the resume row.
+      try {
+        const db = await openDb();
+        const tx = db.transaction("settings", "readwrite");
+        tx.objectStore("settings").delete(`watch:${m.imdb_id}`);
+      } catch (_) {}
+      return;
+    }
+    if (dur > 0 && pos >= 10) {
+      idbPut("settings", `watch:${m.imdb_id}`, _watchRecord(m, pos, dur)).catch(() => {});
+    }
+  }
+
+  function saveCataloguePosition() {
+    if (!currentCatalogueMovie) return;
+    clearTimeout(_watchSaveTimer);
+    _watchSaveTimer = setTimeout(_writeWatchNow, 1500);
+  }
+
+  // Bypass the throttle — used when the player is closing or the page is
+  // navigating away. Caller awaits to ensure the write lands.
+  async function flushCataloguePosition() {
+    clearTimeout(_watchSaveTimer);
+    await _writeWatchNow();
+  }
+
+  async function pruneExpiredWatch() {
+    try {
+      const db = await openDb();
+      const now = Date.now();
+      return new Promise((resolve) => {
+        const tx = db.transaction("settings", "readwrite");
+        const store = tx.objectStore("settings");
+        const cursor = store.openCursor();
+        let dropped = 0;
+        cursor.onsuccess = (e) => {
+          const c = e.target.result;
+          if (!c) { resolve(dropped); return; }
+          if (typeof c.key === "string" && c.key.startsWith("watch:") && c.value) {
+            const exp = c.value.expires_at;
+            if (typeof exp === "number" && exp < now) {
+              c.delete();
+              dropped++;
+            }
+          }
+          c.continue();
+        };
+        cursor.onerror = () => resolve(dropped);
+      });
+    } catch (_) { return 0; }
+  }
+
+  async function loadWatchPositions() {
+    // Prune expired rows lazily before reading.
+    await pruneExpiredWatch();
+    return new Promise((resolve) => {
+      openDb().then((db) => {
+        const out = [];
+        const tx = db.transaction("settings", "readonly");
+        const cursor = tx.objectStore("settings").openCursor();
+        cursor.onsuccess = (e) => {
+          const c = e.target.result;
+          if (!c) { resolve(out); return; }
+          if (typeof c.key === "string" && c.key.startsWith("watch:") && c.value) {
+            out.push(c.value);
+          }
+          c.continue();
+        };
+        cursor.onerror = () => resolve(out);
+      }).catch(() => resolve([]));
+    });
+  }
+  video.addEventListener("timeupdate", saveCataloguePosition);
+  // Flush position synchronously when the user navigates away or closes the tab.
+  window.addEventListener("pagehide", () => { flushCataloguePosition(); });
+  window.addEventListener("beforeunload", () => { flushCataloguePosition(); });
+
+  // Pause-on-leave / resume-on-return — when the user opens an annotation
+  // tab (or switches apps), pause the catalogue movie so they don't miss
+  // anything; resume from the same spot when they come back.
+  document.addEventListener("visibilitychange", () => {
+    if (!currentCatalogueMovie || !player.classList.contains("active")) return;
+    if (document.hidden) {
+      if (!video.paused) {
+        video._pausedByVisibility = true;
+        video.pause();
+      }
+    } else {
+      if (video._pausedByVisibility) {
+        video._pausedByVisibility = false;
+        video.play().catch(() => {});
+      }
+    }
+  });
+
+  /* ---------- Posters (Phase 5 / Netflix-style home) ---------- */
+  // Lazy-fetch poster URL from Wikidata P18 (image), keyed by IMDb id.
+  // Cached in IndexedDB ("settings" store); null cached entries mean
+  // "we tried and there's no P18 image" so we don't refetch.
+  const posterMemCache = new Map(); // imdb_id -> url|null
+  async function fetchPosterUrl(imdbId) {
+    if (!imdbId) return null;
+    if (posterMemCache.has(imdbId)) return posterMemCache.get(imdbId);
+    const idbKey = `poster:${imdbId}`;
+    let cached;
+    try { cached = await idbGet("settings", idbKey); } catch (_) {}
+    if (cached !== undefined) {
+      posterMemCache.set(imdbId, cached);
+      return cached;
+    }
+    // Wikidata SPARQL: find film by IMDb id, return P18 image URL
+    const sparql =
+      `SELECT ?image WHERE { ?f wdt:P345 "${imdbId}". OPTIONAL { ?f wdt:P18 ?image } } LIMIT 1`;
+    const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`;
+    let posterUrl = null;
+    try {
+      const r = await fetch(url, { headers: { Accept: "application/json" } });
+      if (r.ok) {
+        const d = await r.json();
+        const b = d.results && d.results.bindings && d.results.bindings[0];
+        const img = b && b.image && b.image.value;
+        if (img) {
+          // Wikidata returns full Commons FilePath URLs. Append width param
+          // for a smaller poster-sized image.
+          posterUrl = img + (img.includes("?") ? "&" : "?") + "width=400";
+        }
+      }
+    } catch (_) { /* network / CORS — fall through to null */ }
+    posterMemCache.set(imdbId, posterUrl);
+    idbPut("settings", idbKey, posterUrl).catch(() => {});
+    return posterUrl;
+  }
+  async function backfillPosters() {
+    const cards = document.querySelectorAll(".card[data-imdb]:not([data-poster-loaded])");
+    for (const card of cards) {
+      card.setAttribute("data-poster-loaded", "1");
+      const id = card.dataset.imdb;
+      // If a baked-in poster img is already present, skip.
+      if (card.querySelector(".poster-img")) continue;
+      const url = await fetchPosterUrl(id);
+      if (!url) continue;
+      const poster = card.querySelector(".poster");
+      if (!poster) continue;
+      const img = document.createElement("img");
+      img.className = "poster-img";
+      img.loading = "lazy";
+      img.alt = "";
+      img.onload = () => img.classList.add("loaded");
+      img.onerror = () => img.remove();
+      img.src = url;
+      poster.prepend(img);
+    }
+  }
+
+  /* ---------- TF-IDF + recs (Phase 4) ---------- */
+  const TFIDF_STOPWORDS = new Set([
+    "the","and","for","are","but","not","you","your","with","this","that",
+    "have","has","was","were","they","their","them","its","from","will",
+    "what","when","who","why","how","into","out","off","yes","just",
+    "all","any","can","get","got"
+  ]);
+  const TFIDF_KEY = "tfidf-index";
+  let tfidfIndex = null; // { vocab, docs, catalogue_size, built_at }
+
+  function tokenize(text) {
+    return text
+      .toLowerCase()
+      .replace(/\{https?:[^}]*\}/g, " ")            // strip Wikipedia annotations
+      .replace(/<[^>]+>/g, " ")                      // strip HTML / VTT tags
+      .replace(/\d{2}:\d{2}:\d{2}[.,]\d{3}/g, " ")   // strip SRT/VTT timestamps
+      .replace(/[^\p{L}\p{N}\s']/gu, " ")            // punctuation -> space
+      .split(/\s+/)
+      .filter((t) => t.length >= 3 && !TFIDF_STOPWORDS.has(t));
+  }
+
+  function termFreqs(tokens) {
+    const tf = Object.create(null);
+    for (const t of tokens) tf[t] = (tf[t] || 0) + 1;
+    for (const k of Object.keys(tf)) tf[k] = Math.log(1 + tf[k]);
+    return tf;
+  }
+
+  function l2norm(vec) {
+    let s = 0;
+    for (const k in vec) s += vec[k] * vec[k];
+    return Math.sqrt(s) || 1;
+  }
+
+  function cosineSim(a, b) {
+    // a, b are sparse {term: weight}; assumed L2-normalized.
+    let s = 0;
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    const [small, big] = aKeys.length < bKeys.length ? [a, b] : [b, a];
+    for (const k in small) if (k in big) s += small[k] * big[k];
+    return s;
+  }
+
+  async function buildTfIdfIndex(cat) {
+    // 1. Resolve every available SRT and tokenize. SRT text comes from
+    //    window.SRT_DATA (CDN-loaded, works on file://) when available;
+    //    falls back to the legacy inline island, then network fetch.
+    const inlineMap = (window.SRT_DATA && typeof window.SRT_DATA === "object") ? window.SRT_DATA : null;
+    let legacyMap = null;
+    const srtIsland = document.getElementById("srt-data");
+    if (srtIsland && srtIsland.textContent.trim()) {
+      try { legacyMap = JSON.parse(srtIsland.textContent); } catch (_) {}
+    }
+    const docs = {};
+    const fetches = cat
+      .filter((m) => m.imdb_id && m.subtitle_local_english)
+      .map(async (m) => {
+        let text = (inlineMap && inlineMap[m.imdb_id])
+                || (legacyMap && legacyMap[m.imdb_id])
+                || null;
+        if (!text) {
+          try {
+            const r = await fetch(srtUrl(m.subtitle_local_english), { cache: "force-cache" });
+            if (r.ok) text = await r.text();
+          } catch (_e) { /* skip */ }
+        }
+        if (text) {
+          docs[m.imdb_id] = tokenize(text);
+          subtitleCache.set(m.imdb_id, text.toLowerCase());
+        }
+      });
+    await Promise.all(fetches);
+
+    const N = Object.keys(docs).length;
+    if (N === 0) return null;
+
+    // 2. document frequency -> idf
+    const df = Object.create(null);
+    for (const id in docs) {
+      const seen = new Set(docs[id]);
+      for (const t of seen) df[t] = (df[t] || 0) + 1;
+    }
+    const vocab = Object.create(null);
+    for (const t in df) vocab[t] = Math.log(N / df[t]);
+
+    // 3. per-doc tf-idf vectors, L2-normalized
+    const docVecs = {};
+    for (const id in docs) {
+      const tf = termFreqs(docs[id]);
+      const vec = Object.create(null);
+      for (const t in tf) vec[t] = tf[t] * (vocab[t] || 0);
+      const n = l2norm(vec);
+      for (const t in vec) vec[t] /= n;
+      docVecs[id] = { len: docs[id].length, vec };
+    }
+
+    return {
+      vocab,
+      docs: docVecs,
+      catalogue_size: cat.length,
+      built_at: Date.now(),
+    };
+  }
+
+  async function loadOrBuildTfIdf(cat) {
+    let cached = null;
+    try { cached = await idbGet("settings", TFIDF_KEY); } catch (_e) { /* none */ }
+    if (cached && cached.catalogue_size === cat.length) {
+      tfidfIndex = cached;
+      return;
+    }
+    const built = await buildTfIdfIndex(cat);
+    if (built) {
+      tfidfIndex = built;
+      idbPut("settings", TFIDF_KEY, built).catch(() => {});
+    }
+  }
+
+  function tfidfSearch(query) {
+    if (!tfidfIndex) return null;
+    const tokens = tokenize(query);
+    if (tokens.length === 0) return null;
+    const tf = termFreqs(tokens);
+    const qVec = Object.create(null);
+    for (const t in tf) {
+      const idf = tfidfIndex.vocab[t];
+      if (idf) qVec[t] = tf[t] * idf;
+    }
+    const n = l2norm(qVec);
+    if (n === 0) return null;
+    for (const t in qVec) qVec[t] /= n;
+
+    const scored = [];
+    for (const id in tfidfIndex.docs) {
+      const sim = cosineSim(qVec, tfidfIndex.docs[id].vec);
+      if (sim > 0) scored.push({ imdb_id: id, score: sim });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored;
+  }
+
+  function genreOverlap(a, b) {
+    const ga = new Set(a.genre || []);
+    const gb = new Set(b.genre || []);
+    if (ga.size === 0 || gb.size === 0) return 0;
+    let inter = 0;
+    for (const g of ga) if (gb.has(g)) inter++;
+    return inter / Math.max(ga.size, gb.size);
+  }
+
+  function ratingProximity(a, b) {
+    if (a.rating == null || b.rating == null) return 0.5;
+    return 1 - Math.min(Math.abs(a.rating - b.rating), 5) / 5;
+  }
+
+  function moreLikeThis(movie, limit = 6) {
+    const aVec = tfidfIndex && tfidfIndex.docs[movie.imdb_id]
+      ? tfidfIndex.docs[movie.imdb_id].vec
+      : null;
+    return catalogue
+      .filter((m) => m.imdb_id && m.imdb_id !== movie.imdb_id)
+      .map((m) => {
+        const dialogue = (aVec && tfidfIndex.docs[m.imdb_id])
+          ? cosineSim(aVec, tfidfIndex.docs[m.imdb_id].vec)
+          : 0;
+        const score =
+          0.45 * genreOverlap(movie, m) +
+          0.30 * dialogue +
+          0.25 * ratingProximity(movie, m);
+        return { m, score };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((s) => s.m);
+  }
+
+  function renderRecsRail(movie) {
+    const rail  = document.getElementById("recs-rail");
+    const cards = document.getElementById("recs-cards");
+    if (!rail || !cards) return;
+    const recs = moreLikeThis(movie);
+    if (recs.length === 0) {
+      rail.classList.remove("open");
+      return;
+    }
+    cards.innerHTML = recs.map(cardHtml).join("");
+    cards.querySelectorAll(".card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const id = card.dataset.imdb;
+        const m = catalogue.find((x) => x.imdb_id === id);
+        if (m) showDetail(m);
+      });
+    });
+    rail.classList.add("open");
+  }
+
+  function hideRecsRail() {
+    const rail = document.getElementById("recs-rail");
+    if (rail) rail.classList.remove("open");
+  }
+
+  /* ---------- Play a remote catalogue movie ---------- */
+  async function playCatalogueMovie(movie) {
+    showPlayer();
+    currentCatalogueMovie = movie;
+    // Reset Q toggle state — new film, fresh annotations.
+    hideAnnotationsOnSlider();
+    titleEl.textContent = movie.title;
+    document.title = movie.title + " — Public Domain Cinema";
+    hideError();
+
+    /* Reset playlist; remote movies aren't persisted to IndexedDB
+       (no File object). */
+    playlist.forEach((it) => {
+      URL.revokeObjectURL(it.url);
+      (it.subtitles || []).forEach((s) => URL.revokeObjectURL(s.vttUrl));
+    });
+    playlist.length = 0;
+
+    /* Resolve the SRT text. Priority:
+         1. window.SRT_DATA  (CDN <script> load, works on file://)
+         2. legacy <script id="srt-data"> JSON island (older deployments)
+         3. fetch() (works on http/https only) */
+    const subtitles = [];
+    let annotations = [];
+    if (movie.subtitle_local_english) {
+      let text = null;
+      if (window.SRT_DATA && window.SRT_DATA[movie.imdb_id]) {
+        text = window.SRT_DATA[movie.imdb_id];
+      }
+      if (!text) {
+        const srtIsland = document.getElementById("srt-data");
+        if (srtIsland && srtIsland.textContent.trim()) {
+          try {
+            const srtMap = JSON.parse(srtIsland.textContent);
+            if (srtMap[movie.imdb_id]) text = srtMap[movie.imdb_id];
+          } catch (_) {}
+        }
+      }
+      if (!text) {
+        try {
+          const srt = await fetch(srtUrl(movie.subtitle_local_english), { cache: "default" });
+          if (srt.ok) text = await srt.text();
+        } catch (e) {
+          console.warn("SRT fetch failed:", e);
+        }
+      }
+      if (text) {
+        const { vtt, annotations: anns } = processSubtitleText(text, false);
+        const blob = new Blob([vtt], { type: "text/vtt" });
+        const url  = URL.createObjectURL(blob);
+        subtitles.push({ label: "English", vttBlob: blob, vttUrl: url });
+        annotations = anns;
+        subtitleCache.set(movie.imdb_id, text.toLowerCase());
+      }
+    }
+
+    playlist.push({
+      file: null,
+      url:  movie.mp4_url,
+      name: movie.title,
+      subtitles,
+      annotations,
+    });
+    currentIndex = 0;
+
+    /* Mirror the body of playIndex(0) without going through the
+       File-based code path. */
+    // Track the currently-tried URL so the error handler can fall back
+    // to the backup URL (e.g. publicdomainmovie.net direct video) if
+    // the primary (archive.org) source can't be decoded by the browser.
+    movie._mp4_tried = "primary";
+    video.src = movie.mp4_url;
+    loadSubtitleTracks(playlist[0]);
+    // Resume from saved position if any (POLISH-02)
+    let resumePos = 0;
+    try {
+      const saved = await idbGet("settings", `watch:${movie.imdb_id}`);
+      if (saved && saved.position && saved.duration && saved.position / saved.duration < 0.95) {
+        resumePos = saved.position;
+      }
+    } catch (_) {}
+    if (resumePos > 0) {
+      const seekOnce = () => {
+        try { video.currentTime = resumePos; } catch (_) {}
+        video.removeEventListener("loadedmetadata", seekOnce);
+      };
+      video.addEventListener("loadedmetadata", seekOnce);
+    }
+    video.play().catch(() => {});
+    showControls();
+    renderPlaylist();
+    renderCcMenu();
+    updateNavButtons();
+    flashIndicator(resumePos > 0 ? `▶ Resuming ${movie.title}` : `▶ ${movie.title}`);
+    // No "More like this" rail during playback — moved to the detail view.
+  }
+
+  /* ---------- Movie detail view (Netflix-style intermediate page) ---------- */
+  const detailEl     = document.getElementById("detail");
+  const detailTitle  = document.getElementById("detail-title");
+  const detailMeta   = document.getElementById("detail-meta");
+  const detailPlot   = document.getElementById("detail-plot");
+  const detailCast   = document.getElementById("detail-cast");
+  const detailRecs   = document.getElementById("detail-recs-cards");
+  const detailBg     = document.getElementById("detail-backdrop");
+  const detailPlay   = document.getElementById("detail-play-btn");
+  const detailWiki   = document.getElementById("detail-wiki-btn");
+  const detailClose  = document.getElementById("detail-close-btn");
+  let currentDetailMovie = null;
+
+  function showDetail(movie) {
+    if (!movie) return;
+    currentDetailMovie = movie;
+    detailTitle.textContent = movie.title || "";
+    detailMeta.innerHTML = [
+      movie.release_date ? `<span class="pill">${escapeHtml(movie.release_date)}</span>` : "",
+      movie.runtime_minutes ? `<span class="pill">${movie.runtime_minutes} min</span>` : "",
+      movie.rating != null ? `<span class="pill rating">★ ${movie.rating.toFixed(1)}</span>` : "",
+      ...((movie.genre || []).slice(0, 4).map((g) => `<span class="pill">${escapeHtml(g)}</span>`))
+    ].filter(Boolean).join("");
+    detailPlot.textContent = movie.plot || "No description available.";
+    const cast = (movie.cast || []).slice(0, 8);
+    detailCast.innerHTML = cast.length
+      ? `<strong>Cast:</strong> ${cast.map(escapeHtml).join(", ")}`
+      : "";
+    // Prefer backdrop_url (a still or secondary article image) for the
+    // hero backdrop; fall back to poster_url; fall back to a gradient.
+    const bgImg = movie.backdrop_url || movie.poster_url;
+    detailBg.style.backgroundImage = bgImg
+      ? `url("${bgImg}")`
+      : "linear-gradient(135deg, #2a2235 0%, #15151c 100%)";
+
+    if (detailWiki) {
+      if (movie.wikipedia_url) {
+        detailWiki.href = movie.wikipedia_url;
+        detailWiki.style.display = "inline-flex";
+        detailWiki.textContent = "Wikipedia";
+      } else {
+        detailWiki.style.display = "none";
+      }
+    }
+
+    // Render related films (excludes the current movie)
+    const recs = moreLikeThis(movie, 8);
+    detailRecs.innerHTML = recs.map(cardHtml).join("");
+    detailRecs.querySelectorAll(".card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const id = card.dataset.imdb;
+        const m = catalogue.find((x) => x.imdb_id === id);
+        if (m) {
+          // Replace state so back goes to home, not back to previous detail
+          showDetail(m);
+        }
+      });
+    });
+
+    // Show + scroll to top + push history state
+    detailEl.classList.add("active");
+    detailEl.setAttribute("aria-hidden", "false");
+    detailEl.scrollTop = 0;
+    if (history.state?.view !== "detail" || history.state?.imdb !== movie.imdb_id) {
+      history.pushState({ view: "detail", imdb: movie.imdb_id }, "",
+        `#movie/${encodeURIComponent(movie.imdb_id || "")}`);
+    }
+  }
+
+  function hideDetail() {
+    detailEl.classList.remove("active");
+    detailEl.setAttribute("aria-hidden", "true");
+    currentDetailMovie = null;
+  }
+
+  detailPlay.addEventListener("click", () => {
+    if (currentDetailMovie) {
+      const m = currentDetailMovie;
+      hideDetail();
+      playCatalogueMovie(m);
+    }
+  });
+  detailClose.addEventListener("click", (e) => {
+    e.preventDefault();
+    // X always goes home — even if the user navigated detail → detail through
+    // 'More like this' clicks. Pushes a #home state on top of whatever's there
+    // so the browser-back stack stays consistent.
+    hideDetail();
+    showHome();
+  });
+
+  /* ---------- About page ---------- */
+  const aboutEl     = document.getElementById("about");
+  const aboutLink   = document.getElementById("about-link");
+  const aboutClose  = document.getElementById("about-close-btn");
+  function showAbout() {
+    aboutEl.classList.add("active");
+    aboutEl.setAttribute("aria-hidden", "false");
+    aboutEl.scrollTop = 0;
+    if (history.state?.view !== "about") {
+      history.pushState({ view: "about" }, "", "#about");
+    }
+  }
+  function hideAbout() {
+    aboutEl.classList.remove("active");
+    aboutEl.setAttribute("aria-hidden", "true");
+  }
+  if (aboutLink) {
+    aboutLink.addEventListener("click", (e) => { e.preventDefault(); showAbout(); });
+  }
+  if (aboutClose) {
+    aboutClose.addEventListener("click", (e) => {
+      e.preventDefault();
+      hideAbout();
+      showHome();
+    });
+  }
+
+  /* Skip IDB persistence for remote-only playlists. */
+  const _origSavePlaylist = savePlaylist;
+  savePlaylist = async function() {
+    if (playlist.some((it) => !it.file)) return;
+    return _origSavePlaylist();
+  };
+
+  /* ---------- Init / restore ---------- */
+  playIcon.innerHTML = `<path d="${PLAY_PATH}"/>`;
+  fsIcon.innerHTML   = `<path d="${FS_ENTER}"/>`;
+  updateVolumeIcon();
+  updateNavButtons();
+
+  /* Try to restore IDB state first (for users who previously
+     drag-dropped a file). If nothing restored, load the catalogue. */
+  (async () => {
+    try { await restoreState(); } catch {}
+    if (!player.classList.contains("active")) {
+      await loadCatalogue();
+    }
+  })();
+})();
+</script>
+
+</body>
+</html>
